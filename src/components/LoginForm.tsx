@@ -34,12 +34,12 @@ export const LoginForm: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <Mail className="w-6 h-6 text-blue-600" />
+          <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <Mail className="w-6 h-6 text-red-600" />
           </div>
-          <CardTitle className="text-2xl font-bold">Panel Administracyjny</CardTitle>
+          <CardTitle className="text-2xl font-bold">Kartoteka Pacjentów</CardTitle>
           <CardDescription>
-            Zaloguj się używając magicznego linku wysłanego na email
+            Dostęp tylko dla administratora - zaloguj się używając magicznego linku
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -88,6 +88,9 @@ export const LoginForm: React.FC = () => {
           <div className="mt-6 text-center text-sm text-gray-600">
             <p>
               Po kliknięciu w link w emailu zostaniesz automatycznie zalogowany
+            </p>
+            <p className="mt-2 text-xs text-red-600 font-medium">
+              ⚠️ Dostęp tylko dla uprawnionych administratorów
             </p>
           </div>
         </CardContent>
