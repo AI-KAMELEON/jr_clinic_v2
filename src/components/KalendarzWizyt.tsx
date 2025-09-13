@@ -457,6 +457,19 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
 
       await fetchWizyty();
       setIsDialogOpen(false);
+      // Wyczyść formularz po zapisaniu
+      setNowaWizyta({
+        data: selectedDate
+          ? format(selectedDate, "yyyy-MM-dd")
+          : format(new Date(), "yyyy-MM-dd"),
+        godzina: "08:00:00",
+        rodzaj: "Przegląd",
+        notatki: "",
+      });
+      setSelectedWizyta(null);
+      setSelectedPacjent(null);
+      setSearchQuery("");
+      setSearchResults([]);
     } catch (err: any) {
       console.error("Error saving wizyta:", err);
       if (err.code === "23505") {
