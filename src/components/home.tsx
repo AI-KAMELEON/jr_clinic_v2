@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -12,6 +12,9 @@ import { Calendar, Clock, Users, FileText, Plus } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
+import { supabase } from "@/lib/supabase";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -20,37 +23,90 @@ const Home = () => {
   );
   const [prefilledPatientName, setPrefilledPatientName] = useState<string>("");
 
-  // Przykładowe dane dla dashboardu
-  const todayAppointments = [
-    {
-      id: "1",
-      time: "09:00",
-      patientName: "Anna Kowalska",
-      type: "Przegląd",
-      patientId: "2",
-    },
-    {
-      id: "2",
-      time: "10:30",
-      patientName: "Jan Nowak",
-      type: "Leczenie kanałowe",
-      patientId: "1",
-    },
-    {
-      id: "3",
-      time: "12:00",
-      patientName: "Maria Wiśniewska",
-      type: "Wypełnienie",
-      patientId: "3",
-    },
-    {
-      id: "4",
-      time: "14:30",
-      patientName: "Piotr Zieliński",
-      type: "Konsultacja",
-      patientId: "5",
-    },
-  ];
+  // Stan dla danych dashboardu
+  const [dashboardData, setDashboardData] = useState({
+    todayAppointments: [],
+    totalPatients: 0,
+    weeklyAppointments: 0,
+    loading: true,
+    error: null,
+  });
+
+  // Funkcja do pobierania danych dashboardu
+  const fetchDashboardData = async () => {
+    try {
+      setDashboardData(prev => ({ ...prev, loading: true, error: null }));
+
+      const today = new Date().toISOString().split('T')[0];
+      const startOfWeek = new Date();
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const endOfWeek = new Date();
+      endOfWeek.setDate(endOfWeek.getDate() + (6 - endOfWeek.getDay()));
+      
+      const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
+      const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+
+      // Pobierz dzisiejsze wizyty z danymi pacjentów
+      const { data: todayVisits, error: todayError } = await supabase
+        .from("wizyty")
+        .select(`
+          id,
+          data,
+          godzina,
+          rodzaj,
+          pacjenci!inner(imie, nazwisko, id)
+        `)
+        .eq("data", today)
+        .order("godzina");
+
+      if (todayError) throw todayError;
+
+      // Pobierz liczbę pacjentów
+      const { count: totalPatients, error: patientsError } = await supabase
+        .from("pacjenci")
+        .select("*", { count: "exact", head: true });
+
+      if (patientsError) throw patientsError;
+
+      // Pobierz wizyty w tym tygodniu
+      const { count: weeklyAppointments, error: weeklyError } = await supabase
+        .from("wizyty")
+        .select("*", { count: "exact", head: true })
+        .gte("data", startOfWeekStr)
+        .lte("data", endOfWeekStr);
+
+      if (weeklyError) throw weeklyError;
+
+      // Przekształć dane wizyt
+      const formattedTodayAppointments = todayVisits?.map(visit => ({
+        id: visit.id,
+        time: visit.godzina.substring(0, 5),
+        patientName: `${visit.pacjenci.imie} ${visit.pacjenci.nazwisko}`,
+        type: visit.rodzaj,
+        patientId: visit.pacjenci.id,
+      })) || [];
+
+      setDashboardData({
+        todayAppointments: formattedTodayAppointments,
+        totalPatients: totalPatients || 0,
+        weeklyAppointments: weeklyAppointments || 0,
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+      setDashboardData(prev => ({
+        ...prev,
+        loading: false,
+        error: "Błąd podczas pobierania danych dashboardu",
+      }));
+    }
+  };
+
+  // Pobierz dane przy załadowaniu komponentu
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   const handlePatientSelect = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -168,6 +224,14 @@ const Home = () => {
             <TabsContent value="dashboard" className="space-y-6">
               <div>
                 <h2 className="text-2xl font-bold mb-6">Panel główny</h2>
+                
+                {dashboardData.error && (
+                  <Alert className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{dashboardData.error}</AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <Card>
                     <CardHeader className="pb-2">
@@ -176,7 +240,7 @@ const Home = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-3xl font-bold">
-                        {todayAppointments.length}
+                        {dashboardData.loading ? "..." : dashboardData.todayAppointments.length}
                       </div>
                     </CardContent>
                   </Card>
@@ -186,7 +250,9 @@ const Home = () => {
                       <CardDescription>Łączna liczba pacjentów</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-3xl font-bold">124</div>
+                      <div className="text-3xl font-bold">
+                        {dashboardData.loading ? "..." : dashboardData.totalPatients}
+                      </div>
                     </CardContent>
                   </Card>
                   <Card>
@@ -195,7 +261,9 @@ const Home = () => {
                       <CardDescription>Zaplanowane wizyty</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-3xl font-bold">28</div>
+                      <div className="text-3xl font-bold">
+                        {dashboardData.loading ? "..." : dashboardData.weeklyAppointments}
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -209,35 +277,45 @@ const Home = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {todayAppointments.map((appointment) => (
-                      <div
-                        key={appointment.id}
-                        className="flex items-center justify-between border-b pb-2 cursor-pointer hover:bg-muted/50 rounded-md p-2 transition-colors"
-                        onClick={() =>
-                          handlePatientSelect(appointment.patientId)
-                        }
-                        title={`Przejdź do karty pacjenta: ${appointment.patientName}`}
-                      >
-                        <div className="flex items-center">
-                          <div className="bg-primary/10 text-primary rounded-md p-2 mr-3">
-                            <Clock className="h-5 w-5" />
+                  {dashboardData.loading ? (
+                    <div className="text-center py-6 text-muted-foreground">
+                      Ładowanie wizyt...
+                    </div>
+                  ) : dashboardData.todayAppointments.length > 0 ? (
+                    <div className="space-y-4">
+                      {dashboardData.todayAppointments.map((appointment) => (
+                        <div
+                          key={appointment.id}
+                          className="flex items-center justify-between border-b pb-2 cursor-pointer hover:bg-muted/50 rounded-md p-2 transition-colors"
+                          onClick={() =>
+                            handlePatientSelect(appointment.patientId)
+                          }
+                          title={`Przejdź do karty pacjenta: ${appointment.patientName}`}
+                        >
+                          <div className="flex items-center">
+                            <div className="bg-primary/10 text-primary rounded-md p-2 mr-3">
+                              <Clock className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-medium">
+                                {appointment.patientName}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {appointment.type}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">
-                              {appointment.patientName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {appointment.type}
-                            </p>
+                          <div className="text-sm font-medium">
+                            {appointment.time}
                           </div>
                         </div>
-                        <div className="text-sm font-medium">
-                          {appointment.time}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground">
+                      Brak wizyt na dziś
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -273,11 +351,11 @@ const Home = () => {
             </TabsContent>
 
             <TabsContent value="kalendarz">
-              <KalendarzWizyt />
+              <KalendarzWizyt onNavigateToPatients={() => setActiveTab("pacjenci")} />
             </TabsContent>
 
             <TabsContent value="karta-pacjenta">
-              {selectedPatientId && <KartaPacjenta />}
+              {selectedPatientId && <KartaPacjenta patientId={selectedPatientId} />}
             </TabsContent>
           </Tabs>
         </main>

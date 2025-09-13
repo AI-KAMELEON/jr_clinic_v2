@@ -45,6 +45,9 @@ import {
   Search,
   AlertCircle,
   Settings,
+  CheckCircle,
+  X,
+  Users,
 } from "lucide-react";
 import {
   supabase,
@@ -57,6 +60,10 @@ import { Switch } from "@/components/ui/switch";
 
 interface WizytaWithPacjent extends Wizyta {
   pacjenci: Pacjent;
+}
+
+interface KalendarzWizytProps {
+  onNavigateToPatients?: () => void;
 }
 
 interface GodzinyPracy {
@@ -74,7 +81,7 @@ interface PlanPracy {
   niedziela: { aktywny: boolean; godziny: GodzinyPracy };
 }
 
-const KalendarzWizyt = () => {
+const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date(),
   );
@@ -111,6 +118,7 @@ const KalendarzWizyt = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedPacjent, setSelectedPacjent] = useState<Pacjent | null>(null);
+  const [isSelectingPatient, setIsSelectingPatient] = useState(false);
 
   const [nowaWizyta, setNowaWizyta] = useState<Partial<WizytaInsert>>({
     data: format(new Date(), "yyyy-MM-dd"),
@@ -172,23 +180,75 @@ const KalendarzWizyt = () => {
 
   // Search pacjenci by name
   const searchPacjenci = async (query: string) => {
+    console.log("🔍 FUNKCJA WYSZUKIWANIA URUCHOMIONA! Query:", query);
+    
     if (!query.trim()) {
+      console.log("❌ Query puste, zwracam pustą listę");
       setSearchResults([]);
       return;
     }
 
     try {
-      const { data, error } = await supabase
-        .from("pacjenci")
-        .select("*")
-        .or(`imie.ilike.%${query}%,nazwisko.ilike.%${query}%`)
-        .order("nazwisko")
-        .limit(10);
+      console.log("🔍 Wyszukuję w bazie danych...");
+      
+      // Sprawdź czy query zawiera cyfry (numer telefonu)
+      const hasNumbers = /\d/.test(query);
+      console.log("🔍 Zawiera cyfry (telefon):", hasNumbers);
+      
+      let searchQuery;
+      if (hasNumbers) {
+        // Normalizuj numer telefonu - usuń wszystko oprócz cyfr
+        const cleanPhone = query.replace(/\D/g, '');
+        console.log("🔍 Oryginalny numer:", query);
+        console.log("🔍 Oczyszczony numer:", cleanPhone);
+        
+        // Wyszukaj po numerze telefonu (zawiera oczyszczony numer)
+        searchQuery = supabase
+          .from("pacjenci")
+          .select("*")
+          .ilike("telefon", `%${cleanPhone}%`)
+          .order("nazwisko")
+          .limit(10);
+      } else {
+        // Podziel query na imię i nazwisko
+        const parts = query.trim().split(" ");
+        const imie = parts[0] || "";
+        const nazwisko = parts[1] || "";
+        
+        console.log("🔍 Imię:", imie, "Nazwisko:", nazwisko);
+        
+        if (nazwisko) {
+          // Szukaj po imieniu I nazwisku
+          searchQuery = supabase
+            .from("pacjenci")
+            .select("*")
+            .ilike("imie", `%${imie}%`)
+            .ilike("nazwisko", `%${nazwisko}%`)
+            .order("nazwisko")
+            .limit(10);
+        } else {
+          // Szukaj tylko po imieniu lub nazwisku
+          searchQuery = supabase
+            .from("pacjenci")
+            .select("*")
+            .or(`imie.ilike.%${imie}%,nazwisko.ilike.%${imie}%`)
+            .order("nazwisko")
+            .limit(10);
+        }
+      }
+      
+      const { data, error } = await searchQuery;
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Błąd bazy danych:", error);
+        throw error;
+      }
+      
+      console.log("✅ Wyniki z bazy:", data);
       setSearchResults(data || []);
+      setIsSearchOpen(true);
     } catch (err) {
-      console.error("Error searching pacjenci:", err);
+      console.error("❌ Error searching pacjenci:", err);
       setError("Błąd podczas wyszukiwania pacjentów");
     }
   };
@@ -501,20 +561,7 @@ const KalendarzWizyt = () => {
     }
   }, [wizyty]);
 
-  // Search for patients when query changes - with proper debounce
-  useEffect(() => {
-    if (searchQuery.trim().length >= 2) {
-      const timeoutId = setTimeout(() => {
-        searchPacjenci(searchQuery);
-      }, 300);
-      
-      return () => clearTimeout(timeoutId);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
-  // Search for patients - ONLY when user explicitly requests it
+  // Search for patients - ONLY when user explicitly requests it via button
   // useEffect removed - no automatic searching
 
   return (
@@ -742,178 +789,65 @@ const KalendarzWizyt = () => {
               <Label htmlFor="pacjent" className="text-right">
                 Pacjent
               </Label>
-              <div className="col-span-3">
-                <Popover open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <div className="relative">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Wpisz imię i nazwisko pacjenta..."
-                          value={searchQuery}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setSearchQuery(value);
-                            
-                            // Reset selected patient when typing
-                            if (selectedPacjent && value !== `${selectedPacjent.imie} ${selectedPacjent.nazwisko}`) {
-                              setSelectedPacjent(null);
-                              setNowaWizyta({
-                                ...nowaWizyta,
-                                pacjent_id: undefined,
-                              });
-                            }
-                            
-                            // Open dropdown when we have enough characters
-                            if (value.trim().length >= 2) {
-                              setIsSearchOpen(true);
-                            } else {
-                              setIsSearchOpen(false);
-                            }
-                          }}
-                          onFocus={() => {
-                            // Open search if we have enough characters
-                            if (searchQuery.trim().length >= 2) {
-                              setIsSearchOpen(true);
-                            }
-                          }}
-                          onBlur={() => {
-                            // Close search dropdown after a delay to allow clicking on results
-                            setTimeout(() => {
-                              setIsSearchOpen(false);
-                            }, 200);
-                          }}
-                          className="flex-1"
-                        />
-                      </div>
-                      {selectedPacjent && (
-                        <div className="absolute inset-0 bg-green-50 border border-green-200 rounded-md px-3 py-2 flex items-center justify-between pointer-events-none">
-                          <span className="text-green-800">
-                            {selectedPacjent.imie} {selectedPacjent.nazwisko}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="start">
-                    <Command>
-                      <CommandList>
-                        {searchResults.length > 0 ? (
-                          <CommandGroup>
-                            {searchResults.map((pacjent) => (
-                              <CommandItem
-                                key={pacjent.id}
-                                onSelect={() => {
-                                  setSelectedPacjent(pacjent);
-                                  setSearchQuery(
-                                    `${pacjent.imie} ${pacjent.nazwisko}`,
-                                  );
-                                  setNowaWizyta({
-                                    ...nowaWizyta,
-                                    pacjent_id: pacjent.id,
-                                  });
-                                  setIsSearchOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-medium">
-                                    {pacjent.imie} {pacjent.nazwisko}
-                                  </span>
-                                  <span className="text-sm text-gray-500">
-                                    Tel: {pacjent.telefon}
-                                  </span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        ) : searchQuery.trim().length >= 2 ? (
-                          <CommandGroup>
-                            <div className="p-2">
-                              <div className="text-sm text-gray-600 mb-2">
-                                Nie znaleziono pacjenta: "{searchQuery}"
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full"
-                                onClick={async () => {
-                                  const patientName = searchQuery.trim();
-                                  console.log("Creating new patient with name:", patientName);
-                                  
-                                  if (!patientName) return;
-                                  
-                                  // Parse the name
-                                  const nameParts = patientName.split(" ");
-                                  const imie = nameParts[0] || "";
-                                  const nazwisko = nameParts.slice(1).join(" ") || "";
-                                  
-                                  try {
-                                    // Create the patient directly in the database
-                                    const { data: newPatient, error } = await supabase
-                                      .from("pacjenci")
-                                      .insert({
-                                        imie,
-                                        nazwisko,
-                                        telefon: "", // Empty phone number for now
-                                        notatki: `Pacjent dodany automatycznie podczas umówienia wizyty`
-                                      })
-                                      .select()
-                                      .single();
-                                      
-                                    if (error) throw error;
-                                    
-                                    // Update the patient list
-                                    await fetchPacjenci();
-                                    
-                                    // Select the newly created patient
-                                    setSelectedPacjent(newPatient);
-                                    setSearchQuery(`${newPatient.imie} ${newPatient.nazwisko}`);
-                                    setNowaWizyta({
-                                      ...nowaWizyta,
-                                      pacjent_id: newPatient.id,
-                                    });
-                                    setIsSearchOpen(false);
-                                    
-                                    // Show success message
-                                    setError(null);
-                                    
-                                  } catch (err: any) {
-                                    console.error("Error creating patient:", err);
-                                    setError("Błąd podczas dodawania pacjenta: " + err.message);
-                                  }
-                                }}
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Dodaj nowego pacjenta: "{searchQuery}"
-                              </Button>
-                            </div>
-                          </CommandGroup>
-                        ) : (
-                          <CommandEmpty>
-                            Wpisz imię i nazwisko pacjenta
-                          </CommandEmpty>
-                        )}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                {selectedPacjent && (
+              <div className="col-span-3 flex gap-2">
+                <Input
+                  id="pacjent"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Wpisz imię, nazwisko lub numer telefonu"
+                  className="flex-1"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      searchPacjenci(searchQuery);
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => searchPacjenci(searchQuery)}
+                  disabled={searchQuery.trim().length < 2 || loading}
+                >
+                  {loading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Wskaźnik wybranego pacjenta */}
+            {selectedPacjent && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Wybrany pacjent:</Label>
+                <div className="col-span-3 flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-md">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                    <span className="font-medium">
+                      {selectedPacjent.imie} {selectedPacjent.nazwisko}
+                    </span>
+                    {selectedPacjent.telefon && (
+                      <span className="text-sm text-muted-foreground ml-2">
+                        ({selectedPacjent.telefon})
+                      </span>
+                    )}
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setSelectedPacjent(null);
                       setSearchQuery("");
-                      setSearchResults([]);
                       setNowaWizyta({ ...nowaWizyta, pacjent_id: undefined });
                     }}
-                    className="mt-2 text-red-600 hover:text-red-800"
+                    className="text-red-600 hover:text-red-800"
                   >
-                    Wyczyść wybór
+                    <X className="h-4 w-4" />
                   </Button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="data" className="text-right">
@@ -1078,6 +1012,88 @@ const KalendarzWizyt = () => {
               disabled={loading}
             >
               {loading ? "Usuwanie..." : "Usuń"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup z wynikami wyszukiwania pacjentów */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Wyniki wyszukiwania</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-2">
+            {searchResults.length > 0 ? (
+              // Pokaż znalezionych pacjentów
+              <div className="space-y-2">
+                {searchResults.map((pacjent) => (
+                  <div
+                    key={pacjent.id}
+                    className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedPacjent(pacjent);
+                      setSearchQuery(`${pacjent.imie} ${pacjent.nazwisko}`);
+                      setIsSearchOpen(false);
+                      setNowaWizyta({
+                        ...nowaWizyta,
+                        pacjent_id: pacjent.id,
+                      });
+                    }}
+                  >
+                    <div>
+                      <p className="font-medium">{pacjent.imie} {pacjent.nazwisko}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Tel: {pacjent.telefon}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      Wybierz
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Nie znaleziono - pokaż komunikat z przekierowaniem
+              <div className="text-center py-6">
+                <div className="mb-4">
+                  <Search className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-muted-foreground mb-2">
+                    Nie znaleziono pacjenta: "{searchQuery}"
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Aby dodać nowego pacjenta:
+                  </p>
+                  <ol className="text-sm text-muted-foreground mt-2 text-left max-w-md mx-auto">
+                    <li>1. Przejdź do zakładki "Pacjenci"</li>
+                    <li>2. Kliknij "Dodaj nowego pacjenta"</li>
+                    <li>3. Wypełnij formularz i zapisz</li>
+                    <li>4. Wróć tutaj i wyszukaj ponownie</li>
+                  </ol>
+                </div>
+                
+                <div className="space-y-2">
+                  {onNavigateToPatients && (
+                    <Button
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        onNavigateToPatients();
+                      }}
+                      className="w-full"
+                    >
+                      <Users className="mr-2 h-4 w-4" />
+                      Przejdź do panelu Pacjenci
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSearchOpen(false)}>
+              Zamknij
             </Button>
           </DialogFooter>
         </DialogContent>

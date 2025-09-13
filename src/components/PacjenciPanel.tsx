@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,14 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { supabase, type Pacjent } from "@/lib/supabase";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
-interface Pacjent {
-  id: string;
-  imie: string;
-  nazwisko: string;
-  telefon: string;
-  notatki?: string;
-}
 
 interface PacjenciPanelProps {
   onPatientSelect?: (patientId: string) => void;
@@ -57,88 +53,128 @@ const PacjenciPanel = ({
     imie: string;
     nazwisko: string;
   }>({ imie: "", nazwisko: "" });
+  const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Przykładowe dane pacjentów
-  const [pacjenci, setPacjenci] = useState<Pacjent[]>([
-    {
-      id: "1",
-      imie: "Jan",
-      nazwisko: "Kowalski",
-      telefon: "123-456-789",
-      notatki: "Pacjent regularny, bez alergii",
-    },
-    {
-      id: "2",
-      imie: "Anna",
-      nazwisko: "Nowak",
-      telefon: "987-654-321",
-      notatki: "Alergia na penicylinę",
-    },
-    {
-      id: "3",
-      imie: "Piotr",
-      nazwisko: "Wiśniewski",
-      telefon: "555-123-456",
-      notatki: "",
-    },
-    {
-      id: "4",
-      imie: "Magdalena",
-      nazwisko: "Dąbrowska",
-      telefon: "333-222-111",
-      notatki: "Lęk przed zabiegami stomatologicznymi",
-    },
-    {
-      id: "5",
-      imie: "Tomasz",
-      nazwisko: "Lewandowski",
-      telefon: "111-222-333",
-      notatki: "Wymaga premedykacji",
-    },
-  ]);
+  // Fetch pacjenci from database
+  const fetchPacjenci = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("pacjenci")
+        .select("*")
+        .order("nazwisko");
 
-  const handleAddPacjent = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const newPacjent: Pacjent = {
-      id: Date.now().toString(),
-      imie: formData.get("imie") as string,
-      nazwisko: formData.get("nazwisko") as string,
-      telefon: formData.get("telefon") as string,
-      notatki: (formData.get("notatki") as string) || "",
-    };
-    setPacjenci([...pacjenci, newPacjent]);
-    setIsAddDialogOpen(false);
-    setInitialFormData({ imie: "", nazwisko: "" });
-    // Clear the prefilled name after use
-    if (onNameUsed) {
-      onNameUsed();
+      if (error) throw error;
+      setPacjenci(data || []);
+    } catch (err) {
+      console.error("Error fetching pacjenci:", err);
+      setError("Błąd podczas pobierania listy pacjentów");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEditPacjent = (e: React.FormEvent<HTMLFormElement>) => {
+  // Load pacjenci on component mount
+  useEffect(() => {
+    fetchPacjenci();
+  }, []);
+
+  const handleAddPacjent = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      setLoading(true);
+          const { data, error } = await supabase
+            .from("pacjenci")
+            .insert({
+              imie: formData.get("imie") as string,
+              nazwisko: formData.get("nazwisko") as string,
+              telefon: formData.get("telefon") as string,
+              notatki: (formData.get("notatki") as string) || "",
+              adres: (formData.get("adres") as string) || null,
+              data_urodzenia: (formData.get("dataUrodzenia") as string) || null,
+              email: (formData.get("email") as string) || null,
+            })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setPacjenci([...pacjenci, data]);
+      setIsAddDialogOpen(false);
+      setInitialFormData({ imie: "", nazwisko: "" });
+      
+      // Clear the prefilled name after use
+      if (onNameUsed) {
+        onNameUsed();
+      }
+    } catch (err) {
+      console.error("Error adding pacjent:", err);
+      setError("Błąd podczas dodawania pacjenta");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPacjent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!currentPacjent) return;
 
     const formData = new FormData(e.currentTarget);
-    const updatedPacjent: Pacjent = {
-      id: currentPacjent.id,
-      imie: formData.get("imie") as string,
-      nazwisko: formData.get("nazwisko") as string,
-      telefon: formData.get("telefon") as string,
-      notatki: (formData.get("notatki") as string) || "",
-    };
+    
+    try {
+      setLoading(true);
+          const { data, error } = await supabase
+            .from("pacjenci")
+            .update({
+              imie: formData.get("imie") as string,
+              nazwisko: formData.get("nazwisko") as string,
+              telefon: formData.get("telefon") as string,
+              notatki: (formData.get("notatki") as string) || "",
+              adres: (formData.get("adres") as string) || null,
+              data_urodzenia: (formData.get("dataUrodzenia") as string) || null,
+              email: (formData.get("email") as string) || null,
+            })
+        .eq("id", currentPacjent.id)
+        .select()
+        .single();
 
-    setPacjenci(
-      pacjenci.map((p) => (p.id === currentPacjent.id ? updatedPacjent : p)),
-    );
-    setIsEditDialogOpen(false);
-    setCurrentPacjent(null);
+      if (error) throw error;
+
+      setPacjenci(
+        pacjenci.map((p) => (p.id === currentPacjent.id ? data : p)),
+      );
+      setIsEditDialogOpen(false);
+      setCurrentPacjent(null);
+    } catch (err) {
+      console.error("Error updating pacjent:", err);
+      setError("Błąd podczas aktualizacji pacjenta");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeletePacjent = (id: string) => {
+  const handleDeletePacjent = async (id: string) => {
     if (window.confirm("Czy na pewno chcesz usunąć tego pacjenta?")) {
-      setPacjenci(pacjenci.filter((p) => p.id !== id));
+      try {
+        setLoading(true);
+        const { error } = await supabase
+          .from("pacjenci")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+
+        setPacjenci(pacjenci.filter((p) => p.id !== id));
+      } catch (err) {
+        console.error("Error deleting pacjent:", err);
+        setError("Błąd podczas usuwania pacjenta");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -179,6 +215,13 @@ const PacjenciPanel = ({
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm w-full">
+      {error && (
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-2xl font-bold">
@@ -263,6 +306,40 @@ const PacjenciPanel = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="email" className="text-right">
+                          Email
+                        </Label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          className="col-span-3"
+                          placeholder="adres@email.com"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="adres" className="text-right">
+                          Adres
+                        </Label>
+                        <Input
+                          id="adres"
+                          name="adres"
+                          className="col-span-3"
+                          placeholder="ul. Przykładowa 123, 00-000 Miasto"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="dataUrodzenia" className="text-right">
+                          Data urodzenia
+                        </Label>
+                        <Input
+                          id="dataUrodzenia"
+                          name="dataUrodzenia"
+                          type="date"
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="notatki" className="text-right">
                           Notatki
                         </Label>
@@ -275,7 +352,9 @@ const PacjenciPanel = ({
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type="submit">Zapisz</Button>
+                      <Button type="submit" disabled={loading}>
+                        {loading ? "Zapisywanie..." : "Zapisz"}
+                      </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -295,7 +374,16 @@ const PacjenciPanel = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPacjenci.length > 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Ładowanie pacjentów...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredPacjenci.length > 0 ? (
                   filteredPacjenci.map((pacjent) => (
                     <TableRow
                       key={pacjent.id}
@@ -399,6 +487,43 @@ const PacjenciPanel = ({
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-email" className="text-right">
+                    Email
+                  </Label>
+                  <Input
+                    id="edit-email"
+                    name="email"
+                    type="email"
+                    className="col-span-3"
+                    defaultValue={currentPacjent.email || ""}
+                    placeholder="adres@email.com"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-adres" className="text-right">
+                    Adres
+                  </Label>
+                  <Input
+                    id="edit-adres"
+                    name="adres"
+                    className="col-span-3"
+                    defaultValue={currentPacjent.adres || ""}
+                    placeholder="ul. Przykładowa 123, 00-000 Miasto"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-dataUrodzenia" className="text-right">
+                    Data urodzenia
+                  </Label>
+                  <Input
+                    id="edit-dataUrodzenia"
+                    name="dataUrodzenia"
+                    type="date"
+                    className="col-span-3"
+                    defaultValue={currentPacjent.data_urodzenia ? new Date(currentPacjent.data_urodzenia).toISOString().split('T')[0] : ""}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-notatki" className="text-right">
                     Notatki
                   </Label>
@@ -412,7 +537,9 @@ const PacjenciPanel = ({
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit">Zapisz zmiany</Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Zapisywanie..." : "Zapisz zmiany"}
+                </Button>
               </DialogFooter>
             </form>
           )}
