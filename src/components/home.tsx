@@ -162,26 +162,18 @@ const Home = () => {
             <h1 className="text-xl font-bold">Klinika Stomatologiczna</h1>
           </div>
           <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="sm">
-              Pomoc
+            <span className="text-sm text-gray-600">
+              {user?.email}
+            </span>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={signOut}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Wyloguj
             </Button>
-            <Button variant="ghost" size="sm">
-              Ustawienia
-            </Button>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">
-                {user?.email}
-              </span>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={signOut}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Wyloguj
-              </Button>
-            </div>
           </div>
         </div>
       </header>
