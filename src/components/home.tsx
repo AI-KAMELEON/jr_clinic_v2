@@ -12,9 +12,10 @@ import { Calendar, Clock, Users, FileText, Plus, LogOut } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
+import { AdminManagement } from "./AdminManagement";
 import { supabase } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Home = () => {
@@ -224,6 +225,14 @@ const Home = () => {
                 Karta pacjenta
               </Button>
             )}
+            <Button
+              variant={activeTab === "administratorzy" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("administratorzy")}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Administratorzy
+            </Button>
           </nav>
         </aside>
 
@@ -369,6 +378,10 @@ const Home = () => {
 
             <TabsContent value="karta-pacjenta">
               {selectedPatientId && selectedPatient && <KartaPacjenta pacjent={selectedPatient} />}
+            </TabsContent>
+
+            <TabsContent value="administratorzy">
+              <AdminManagement />
             </TabsContent>
           </Tabs>
         </main>
