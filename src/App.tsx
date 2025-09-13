@@ -1,27 +1,14 @@
-import { Suspense } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import Home from "./components/home";
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Suspense fallback={<p>Loading...</p>}>
-          <Routes>
-            <Route 
-              path="/" 
-              element={
-                <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              } 
-            />
-          </Routes>
-        </Suspense>
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <ProtectedRoute>
+        <Home />
+      </ProtectedRoute>
+    </AuthProvider>
   );
 }
 
