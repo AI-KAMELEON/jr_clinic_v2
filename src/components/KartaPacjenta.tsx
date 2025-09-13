@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/lib/supabase";
 import {
   Card,
   CardContent,
@@ -60,48 +61,55 @@ interface Pacjent {
   notatkiOgolne?: string;
 }
 
-const KartaPacjenta = ({ pacjent: propsPacjent }: { pacjent?: Pacjent }) => {
-  // Domyślne dane pacjenta jeśli nie przekazano props
-  const defaultPacjent: Pacjent = {
-    id: "1",
-    imie: "Jan",
-    nazwisko: "Kowalski",
-    telefon: "123-456-789",
-    email: "jan.kowalski@example.com",
-    adres: "ul. Przykładowa 123, 00-000 Warszawa",
-    dataUrodzenia: new Date(1980, 0, 1),
-    notatkiOgolne: "Pacjent regularny, bez alergii. Preferuje wizyty rano.",
-    wizyty: [
-      {
-        id: "w1",
-        data: new Date(2023, 5, 15, 10, 0),
-        opis: "Badanie kontrolne",
-        zabiegi: "Przegląd, skaling, fluoryzacja",
-      },
-      {
-        id: "w2",
-        data: new Date(2023, 6, 20, 14, 30),
-        opis: "Leczenie kanałowe",
-        zabiegi: "Leczenie kanałowe zęba 25",
-      },
-    ],
-    notatki: [
-      {
-        id: "n1",
-        data: new Date(2023, 5, 15),
-        tresc: "Pacjent zgłasza nadwrażliwość na zimne napoje.",
-      },
-      {
-        id: "n2",
-        data: new Date(2023, 6, 20),
-        tresc: "Zalecono stosowanie pasty do zębów dla zębów wrażliwych.",
-      },
-    ],
-  };
+const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
+  const [pacjent, setPacjent] = useState<Pacjent | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [pacjent, setPacjent] = useState<Pacjent>(
-    propsPacjent || defaultPacjent,
-  );
+  // Pobierz dane pacjenta z Supabase
+  useEffect(() => {
+    const fetchPacjent = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pacjenci')
+          .select('*')
+          .eq('id', pacjentId)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setPacjent({
+            id: data.id,
+            imie: data.imie,
+            nazwisko: data.nazwisko,
+            telefon: data.telefon,
+            email: data.email || '',
+            adres: data.adres || '',
+            dataUrodzenia: data.data_urodzenia ? new Date(data.data_urodzenia) : null,
+            notatkiOgolne: data.notatki || '',
+            wizyty: [], // TODO: Pobierz wizyty
+            notatki: [], // TODO: Pobierz notatki
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching patient:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPacjent();
+  }, [pacjentId]);
+
+  if (loading) {
+    return <div>Ładowanie danych pacjenta...</div>;
+  }
+
+  if (!pacjent) {
+    return <div>Nie znaleziono pacjenta</div>;
+  }
+
+  // Użyj danych pobranych z Supabase
   const [edytujDane, setEdytujDane] = useState(false);
   const [nowaWizyta, setNowaWizyta] = useState(false);
   const [nowaNotatka, setNowaNotatka] = useState(false);

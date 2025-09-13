@@ -377,7 +377,7 @@ const Home = () => {
             </TabsContent>
 
             <TabsContent value="karta-pacjenta">
-              {selectedPatientId && <KartaPacjenta pacjent={{ id: selectedPatientId }} />}
+              {selectedPatientId && <KartaPacjenta pacjentId={selectedPatientId} />}
             </TabsContent>
 
             <TabsContent value="administratorzy">
