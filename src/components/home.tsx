@@ -8,15 +8,17 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, FileText, Plus } from "lucide-react";
+import { Calendar, Clock, Users, FileText, Plus, LogOut } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
 import { supabase } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Home = () => {
+  const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(
     null,
@@ -165,8 +167,19 @@ const Home = () => {
             <Button variant="ghost" size="sm">
               Ustawienia
             </Button>
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-              <span className="text-sm font-medium">AD</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">
+                {user?.email}
+              </span>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={signOut}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Wyloguj
+              </Button>
             </div>
           </div>
         </div>
