@@ -222,6 +222,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       setPacjent({ ...pacjent, wizyty: [...pacjent.wizyty, nowaWizyta] });
     }
 
+    // Zamknij dialog i wyczyść formularz
     setNowaWizyta(false);
     setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
   };
@@ -276,6 +277,13 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       opis: wizyta.opis,
       zabiegi: wizyta.zabiegi,
     });
+    setNowaWizyta(true);
+  };
+
+  // Otwórz dialog dodawania nowej wizyty
+  const handleNowaWizyta = () => {
+    setEdytowanaWizyta(null);
+    setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
     setNowaWizyta(true);
   };
 
@@ -367,13 +375,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                   Lista wszystkich wizyt pacjenta
                 </CardDescription>
               </div>
-              <Button
-                onClick={() => {
-                  setNowaWizyta(true);
-                  setEdytowanaWizyta(null);
-                  setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
-                }}
-              >
+              <Button onClick={handleNowaWizyta}>
                 <PlusIcon className="h-4 w-4 mr-2" /> Dodaj wizytę
               </Button>
             </CardHeader>
