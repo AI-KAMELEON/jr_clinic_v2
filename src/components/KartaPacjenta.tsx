@@ -101,15 +101,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     fetchPacjent();
   }, [pacjentId]);
 
-  if (loading) {
-    return <div>Ładowanie danych pacjenta...</div>;
-  }
-
-  if (!pacjent) {
-    return <div>Nie znaleziono pacjenta</div>;
-  }
-
-  // Użyj danych pobranych z Supabase
+  // Hooki muszą być wywoływane przed każdym return
   const [edytujDane, setEdytujDane] = useState(false);
   const [nowaWizyta, setNowaWizyta] = useState(false);
   const [nowaNotatka, setNowaNotatka] = useState(false);
@@ -118,17 +110,17 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     null,
   );
 
-  // Formularz danych pacjenta
+  // Formularz danych pacjenta - użyj domyślnych wartości
   const [formDane, setFormDane] = useState({
-    imie: pacjent.imie,
-    nazwisko: pacjent.nazwisko,
-    telefon: pacjent.telefon,
-    email: pacjent.email,
-    adres: pacjent.adres,
-    dataUrodzenia: pacjent.dataUrodzenia
+    imie: pacjent?.imie || "",
+    nazwisko: pacjent?.nazwisko || "",
+    telefon: pacjent?.telefon || "",
+    email: pacjent?.email || "",
+    adres: pacjent?.adres || "",
+    dataUrodzenia: pacjent?.dataUrodzenia
       ? format(pacjent.dataUrodzenia, "yyyy-MM-dd")
       : "",
-    notatkiOgolne: pacjent.notatkiOgolne || "",
+    notatkiOgolne: pacjent?.notatkiOgolne || "",
   });
 
   // Formularz wizyty
@@ -143,6 +135,31 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [formNotatka, setFormNotatka] = useState({
     tresc: "",
   });
+
+  // Aktualizuj formularz gdy pacjent się zmieni
+  useEffect(() => {
+    if (pacjent) {
+      setFormDane({
+        imie: pacjent.imie,
+        nazwisko: pacjent.nazwisko,
+        telefon: pacjent.telefon,
+        email: pacjent.email,
+        adres: pacjent.adres,
+        dataUrodzenia: pacjent.dataUrodzenia
+          ? format(pacjent.dataUrodzenia, "yyyy-MM-dd")
+          : "",
+        notatkiOgolne: pacjent.notatkiOgolne || "",
+      });
+    }
+  }, [pacjent]);
+
+  if (loading) {
+    return <div>Ładowanie danych pacjenta...</div>;
+  }
+
+  if (!pacjent) {
+    return <div>Nie znaleziono pacjenta</div>;
+  }
 
   // Obsługa formularza danych pacjenta
   const handleDaneChange = (
