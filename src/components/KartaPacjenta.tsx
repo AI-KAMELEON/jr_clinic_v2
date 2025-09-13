@@ -282,19 +282,23 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
 
   // Otwórz dialog dodawania nowej wizyty
   const handleNowaWizyta = () => {
+    console.log("handleNowaWizyta - przed czyszczeniem:", formWizyta);
     setEdytowanaWizyta(null);
     // Wyczyść formularz wizyty
     setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
+    console.log("handleNowaWizyta - po czyszczeniu");
     setNowaWizyta(true);
   };
 
   // Zamknij dialog wizyty i wyczyść formularz
   const handleCloseWizyta = (open: boolean) => {
+    console.log("handleCloseWizyta - open:", open, "formWizyta:", formWizyta);
     setNowaWizyta(open);
     if (!open) {
       // Wyczyść formularz gdy dialog jest zamykany
       setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
       setEdytowanaWizyta(null);
+      console.log("handleCloseWizyta - formularz wyczyszczony");
     }
   };
 
