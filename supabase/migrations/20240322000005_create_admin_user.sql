@@ -2,7 +2,7 @@
 -- Zastąp 'admin@example.com' swoim emailem
 
 INSERT INTO public.administrators (id, email, name) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'admin@example.com', 'Administrator')
+  ('00000000-0000-0000-0000-000000000001', 'twoj-email@example.com', 'Twoje Imię')
 ON CONFLICT (email) DO NOTHING;
 
 -- Dodaj komentarz z instrukcjami
