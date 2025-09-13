@@ -283,8 +283,19 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   // Otwórz dialog dodawania nowej wizyty
   const handleNowaWizyta = () => {
     setEdytowanaWizyta(null);
+    // Wyczyść formularz wizyty
     setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
     setNowaWizyta(true);
+  };
+
+  // Zamknij dialog wizyty i wyczyść formularz
+  const handleCloseWizyta = (open: boolean) => {
+    setNowaWizyta(open);
+    if (!open) {
+      // Wyczyść formularz gdy dialog jest zamykany
+      setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
+      setEdytowanaWizyta(null);
+    }
   };
 
   // Edycja notatki
@@ -633,7 +644,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       </Dialog>
 
       {/* Dialog dodawania/edycji wizyty */}
-      <Dialog open={nowaWizyta} onOpenChange={setNowaWizyta}>
+      <Dialog open={nowaWizyta} onOpenChange={handleCloseWizyta}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
