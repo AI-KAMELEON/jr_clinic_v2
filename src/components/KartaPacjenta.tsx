@@ -34,19 +34,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { validatePESEL, extractDateFromPESEL, formatPESEL } from "@/lib/utils";
+import { type VisitStatus } from "@/lib/supabase";
 
 interface Wizyta {
   id: string;
   data: Date;
-  opis: string;
-  zabiegi: string;
+  rodzaj: string;
+  notatki: string;
+  status?: VisitStatus;
 }
 
-interface Notatka {
-  id: string;
-  data: Date;
-  tresc: string;
-}
 
 interface Pacjent {
   id: string;
@@ -55,9 +53,9 @@ interface Pacjent {
   telefon: string;
   email: string;
   adres: string;
-  dataUrodzenia: Date | null;
+  pesel: string | null;
+  brakPesel: boolean;
   wizyty: Wizyta[];
-  notatki: Notatka[];
   notatkiOgolne?: string;
 }
 
@@ -78,6 +76,25 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         if (error) throw error;
 
         if (data) {
+          // Pobierz wizyty dla tego pacjenta
+          const { data: wizytyData, error: wizytyError } = await supabase
+            .from('wizyty')
+            .select('*')
+            .eq('pacjent_id', pacjentId)
+            .order('data', { ascending: false });
+
+          if (wizytyError) {
+            console.error('Error fetching visits:', wizytyError);
+          }
+
+          const wizyty = wizytyData?.map(wizyta => ({
+            id: wizyta.id,
+            data: new Date(wizyta.data + 'T' + wizyta.godzina),
+            rodzaj: wizyta.rodzaj,
+            notatki: wizyta.notatki || '',
+            status: wizyta.status || 'zaplanowana'
+          })) || [];
+
           setPacjent({
             id: data.id,
             imie: data.imie,
@@ -85,10 +102,10 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             telefon: data.telefon,
             email: data.email || '',
             adres: data.adres || '',
-            dataUrodzenia: data.data_urodzenia ? new Date(data.data_urodzenia) : null,
+            pesel: data.pesel || null,
+            brakPesel: data.brak_pesel || false,
             notatkiOgolne: data.notatki || '',
-            wizyty: [], // TODO: Pobierz wizyty
-            notatki: [], // TODO: Pobierz notatki
+            wizyty: wizyty,
           });
         }
       } catch (error) {
@@ -104,11 +121,20 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   // Hooki muszą być wywoływane przed każdym return
   const [edytujDane, setEdytujDane] = useState(false);
   const [nowaWizyta, setNowaWizyta] = useState(false);
-  const [nowaNotatka, setNowaNotatka] = useState(false);
   const [edytowanaWizyta, setEdytowanaWizyta] = useState<Wizyta | null>(null);
-  const [edytowanaNotatka, setEdytowanaNotatka] = useState<Notatka | null>(
-    null,
-  );
+
+  // Get visit background color based on status
+  const getVisitBackgroundColor = (status?: VisitStatus): string => {
+    switch (status) {
+      case 'wykonana':
+        return 'bg-green-50';
+      case 'odwolana':
+        return 'bg-red-50';
+      case 'zaplanowana':
+      default:
+        return 'bg-white';
+    }
+  };
 
   // Formularz danych pacjenta - użyj domyślnych wartości
   const [formDane, setFormDane] = useState({
@@ -117,9 +143,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     telefon: pacjent?.telefon || "",
     email: pacjent?.email || "",
     adres: pacjent?.adres || "",
-    dataUrodzenia: pacjent?.dataUrodzenia
-      ? format(pacjent.dataUrodzenia, "yyyy-MM-dd")
-      : "",
+    pesel: pacjent?.pesel || "",
+    brakPesel: pacjent?.brakPesel || false,
     notatkiOgolne: pacjent?.notatkiOgolne || "",
   });
 
@@ -127,14 +152,10 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [formWizyta, setFormWizyta] = useState({
     data: "",
     czas: "",
-    opis: "",
-    zabiegi: "",
+    rodzaj: "",
+    notatki: "",
   });
 
-  // Formularz notatki
-  const [formNotatka, setFormNotatka] = useState({
-    tresc: "",
-  });
 
   // Aktualizuj formularz gdy pacjent się zmieni
   useEffect(() => {
@@ -145,9 +166,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         telefon: pacjent.telefon,
         email: pacjent.email,
         adres: pacjent.adres,
-        dataUrodzenia: pacjent.dataUrodzenia
-          ? format(pacjent.dataUrodzenia, "yyyy-MM-dd")
-          : "",
+        pesel: pacjent.pesel || "",
+        brakPesel: pacjent.brakPesel || false,
         notatkiOgolne: pacjent.notatkiOgolne || "",
       });
     }
@@ -165,8 +185,13 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const handleDaneChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
-    const { name, value } = e.target;
-    setFormDane((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormDane((prev) => ({ ...prev, [name]: checked }));
+    } else {
+      setFormDane((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleDaneSubmit = () => {
@@ -177,9 +202,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       telefon: formDane.telefon,
       email: formDane.email,
       adres: formDane.adres,
-      dataUrodzenia: formDane.dataUrodzenia
-        ? new Date(formDane.dataUrodzenia)
-        : null,
+      pesel: formDane.brakPesel ? null : formDane.pesel,
+      brakPesel: formDane.brakPesel,
       notatkiOgolne: formDane.notatkiOgolne,
     };
     setPacjent(updatedPacjent);
@@ -194,79 +218,89 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     setFormWizyta((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleWizytaSubmit = () => {
+  const handleWizytaSubmit = async () => {
     const dataCzas = new Date(`${formWizyta.data}T${formWizyta.czas}`);
 
-    if (edytowanaWizyta) {
-      // Edycja istniejącej wizyty
-      const updatedWizyty = pacjent.wizyty.map((w) =>
-        w.id === edytowanaWizyta.id
-          ? {
-              ...w,
-              data: dataCzas,
-              opis: formWizyta.opis,
-              zabiegi: formWizyta.zabiegi,
-            }
-          : w,
-      );
-      setPacjent({ ...pacjent, wizyty: updatedWizyty });
-      setEdytowanaWizyta(null);
-    } else {
-      // Dodanie nowej wizyty
-      const nowaWizyta: Wizyta = {
-        id: `w${Date.now()}`,
-        data: dataCzas,
-        opis: formWizyta.opis,
-        zabiegi: formWizyta.zabiegi,
-      };
-      setPacjent({ ...pacjent, wizyty: [...pacjent.wizyty, nowaWizyta] });
+    try {
+      if (edytowanaWizyta) {
+        // Edycja istniejącej wizyty w bazie danych
+        const { error } = await supabase
+          .from('wizyty')
+          .update({
+            data: formWizyta.data,
+            godzina: formWizyta.czas,
+            rodzaj: formWizyta.rodzaj,
+            notatki: formWizyta.notatki
+          })
+          .eq('id', edytowanaWizyta.id);
+
+        if (error) throw error;
+
+        // Aktualizuj lokalny stan
+        const updatedWizyty = pacjent.wizyty.map((w) =>
+          w.id === edytowanaWizyta.id
+            ? {
+                ...w,
+                data: dataCzas,
+                rodzaj: formWizyta.rodzaj,
+                notatki: formWizyta.notatki,
+              }
+            : w,
+        );
+        setPacjent({ ...pacjent, wizyty: updatedWizyty });
+        setEdytowanaWizyta(null);
+      } else {
+        // Dodanie nowej wizyty do bazy danych
+        const { data: newWizyta, error } = await supabase
+          .from('wizyty')
+          .insert({
+            pacjent_id: pacjentId,
+            data: formWizyta.data,
+            godzina: formWizyta.czas,
+            rodzaj: formWizyta.rodzaj,
+            notatki: formWizyta.notatki
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Dodaj do lokalnego stanu
+        const nowaWizyta: Wizyta = {
+          id: newWizyta.id,
+          data: dataCzas,
+          rodzaj: formWizyta.rodzaj,
+          notatki: formWizyta.notatki,
+        };
+        setPacjent({ ...pacjent, wizyty: [...pacjent.wizyty, nowaWizyta] });
+      }
+
+      // Zamknij dialog i wyczyść formularz
+      setNowaWizyta(false);
+      setFormWizyta({ data: "", czas: "", rodzaj: "", notatki: "" });
+    } catch (error) {
+      console.error('Error saving visit:', error);
     }
-
-    // Zamknij dialog i wyczyść formularz
-    setNowaWizyta(false);
-    setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
   };
 
-  // Obsługa formularza notatki
-  const handleNotatkaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFormNotatka({ tresc: e.target.value });
-  };
-
-  const handleNotatkaSubmit = () => {
-    if (edytowanaNotatka) {
-      // Edycja istniejącej notatki
-      const updatedNotatki = pacjent.notatki.map((n) =>
-        n.id === edytowanaNotatka.id
-          ? { ...n, tresc: formNotatka.tresc, data: new Date() }
-          : n,
-      );
-      setPacjent({ ...pacjent, notatki: updatedNotatki });
-      setEdytowanaNotatka(null);
-    } else {
-      // Dodanie nowej notatki
-      const nowaNotatka: Notatka = {
-        id: `n${Date.now()}`,
-        data: new Date(),
-        tresc: formNotatka.tresc,
-      };
-      setPacjent({ ...pacjent, notatki: [...pacjent.notatki, nowaNotatka] });
-    }
-
-    setNowaNotatka(false);
-    setFormNotatka({ tresc: "" });
-  };
 
   // Usuwanie wizyty
-  const handleUsunWizyte = (id: string) => {
-    const updatedWizyty = pacjent.wizyty.filter((w) => w.id !== id);
-    setPacjent({ ...pacjent, wizyty: updatedWizyty });
+  const handleUsunWizyte = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('wizyty')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      const updatedWizyty = pacjent.wizyty.filter((w) => w.id !== id);
+      setPacjent({ ...pacjent, wizyty: updatedWizyty });
+    } catch (error) {
+      console.error('Error deleting visit:', error);
+    }
   };
 
-  // Usuwanie notatki
-  const handleUsunNotatke = (id: string) => {
-    const updatedNotatki = pacjent.notatki.filter((n) => n.id !== id);
-    setPacjent({ ...pacjent, notatki: updatedNotatki });
-  };
 
   // Edycja wizyty
   const handleEdytujWizyte = (wizyta: Wizyta) => {
@@ -274,8 +308,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     setFormWizyta({
       data: format(wizyta.data, "yyyy-MM-dd"),
       czas: format(wizyta.data, "HH:mm"),
-      opis: wizyta.opis,
-      zabiegi: wizyta.zabiegi,
+      rodzaj: wizyta.rodzaj,
+      notatki: wizyta.notatki,
     });
     setNowaWizyta(true);
   };
@@ -285,7 +319,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     console.log("handleNowaWizyta - przed czyszczeniem:", formWizyta);
     setEdytowanaWizyta(null);
     // Wyczyść formularz wizyty
-    setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
+    setFormWizyta({ data: "", czas: "", rodzaj: "", notatki: "" });
     console.log("handleNowaWizyta - po czyszczeniu");
     setNowaWizyta(true);
   };
@@ -296,18 +330,12 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     setNowaWizyta(open);
     if (!open) {
       // Wyczyść formularz gdy dialog jest zamykany
-      setFormWizyta({ data: "", czas: "", opis: "", zabiegi: "" });
+      setFormWizyta({ data: "", czas: "", rodzaj: "", notatki: "" });
       setEdytowanaWizyta(null);
       console.log("handleCloseWizyta - formularz wyczyszczony");
     }
   };
 
-  // Edycja notatki
-  const handleEdytujNotatke = (notatka: Notatka) => {
-    setEdytowanaNotatka(notatka);
-    setFormNotatka({ tresc: notatka.tresc });
-    setNowaNotatka(true);
-  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-7xl mx-auto">
@@ -321,11 +349,9 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       </div>
 
       <Tabs defaultValue="dane" className="w-full">
-        <TabsList className="grid grid-cols-4 mb-6">
+        <TabsList className="grid grid-cols-2 mb-6">
           <TabsTrigger value="dane">Dane osobowe</TabsTrigger>
           <TabsTrigger value="wizyty">Historia wizyt</TabsTrigger>
-          <TabsTrigger value="notatki">Notatki wizyt</TabsTrigger>
-          <TabsTrigger value="notatki-ogolne">Notatki ogólne</TabsTrigger>
         </TabsList>
 
         {/* Zakładka z danymi osobowymi */}
@@ -360,13 +386,22 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                   <div className="font-medium">{pacjent.adres || "-"}</div>
                 </div>
                 <div>
-                  <Label>Data urodzenia</Label>
+                  <Label>Numer PESEL</Label>
                   <div className="font-medium">
-                    {pacjent.dataUrodzenia
-                      ? format(pacjent.dataUrodzenia, "dd MMMM yyyy", {
-                          locale: pl,
-                        })
-                      : "-"}
+                    {pacjent.brakPesel ? (
+                      <span className="text-gray-500 italic">Brak numeru PESEL</span>
+                    ) : pacjent.pesel ? (
+                      <div className="flex items-center gap-2">
+                        <span>{formatPESEL(pacjent.pesel)}</span>
+                        {validatePESEL(pacjent.pesel) ? (
+                          <span className="text-green-600 text-sm">✓ Prawidłowy</span>
+                        ) : (
+                          <span className="text-red-600 text-sm">✗ Nieprawidłowy</span>
+                        )}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </div>
                 </div>
                 <div className="md:col-span-2">
@@ -401,8 +436,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                     <TableRow>
                       <TableHead>Data</TableHead>
                       <TableHead>Godzina</TableHead>
-                      <TableHead>Opis</TableHead>
-                      <TableHead>Zabiegi</TableHead>
+                      <TableHead>Rodzaj</TableHead>
+                      <TableHead>Notatki</TableHead>
                       <TableHead className="text-right">Akcje</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -411,7 +446,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                       pacjent.wizyty
                         .sort((a, b) => b.data.getTime() - a.data.getTime())
                         .map((wizyta) => (
-                          <TableRow key={wizyta.id}>
+                          <TableRow key={wizyta.id} className={getVisitBackgroundColor(wizyta.status)}>
                             <TableCell>
                               {format(wizyta.data, "dd.MM.yyyy", {
                                 locale: pl,
@@ -420,8 +455,12 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                             <TableCell>
                               {format(wizyta.data, "HH:mm")}
                             </TableCell>
-                            <TableCell>{wizyta.opis}</TableCell>
-                            <TableCell>{wizyta.zabiegi}</TableCell>
+                            <TableCell>{wizyta.rodzaj}</TableCell>
+                            <TableCell className="max-w-xs">
+                              <div className="truncate" title={wizyta.notatki}>
+                                {wizyta.notatki || "-"}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button
@@ -459,101 +498,6 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
           </Card>
         </TabsContent>
 
-        {/* Zakładka z notatkami wizyt */}
-        <TabsContent value="notatki">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Notatki wizyt</CardTitle>
-                <CardDescription>
-                  Notatki związane z konkretnymi wizytami
-                </CardDescription>
-              </div>
-              <Button
-                onClick={() => {
-                  setNowaNotatka(true);
-                  setEdytowanaNotatka(null);
-                  setFormNotatka({ tresc: "" });
-                }}
-              >
-                <PlusIcon className="h-4 w-4 mr-2" /> Dodaj notatkę
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px] w-full pr-4">
-                {pacjent.notatki.length > 0 ? (
-                  <div className="space-y-4">
-                    {pacjent.notatki
-                      .sort((a, b) => b.data.getTime() - a.data.getTime())
-                      .map((notatka) => (
-                        <Card key={notatka.id}>
-                          <CardHeader className="py-3">
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <CalendarIcon className="h-4 w-4 mr-2" />
-                                {format(notatka.data, "dd MMMM yyyy", {
-                                  locale: pl,
-                                })}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEdytujNotatke(notatka)}
-                                >
-                                  <PencilIcon className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleUsunNotatke(notatka.id)}
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="py-2">
-                            <p className="whitespace-pre-wrap">
-                              {notatka.tresc}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Brak notatek dla tego pacjenta
-                  </div>
-                )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Zakładka z notatkami ogólnymi */}
-        <TabsContent value="notatki-ogolne">
-          <Card>
-            <CardHeader>
-              <CardTitle>Notatki ogólne</CardTitle>
-              <CardDescription>
-                Ogólne informacje i uwagi dotyczące pacjenta
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="p-4 border rounded-lg bg-muted/50">
-                  <div className="whitespace-pre-wrap">
-                    {pacjent.notatkiOgolne || "Brak notatek ogólnych"}
-                  </div>
-                </div>
-                <Button onClick={() => setEdytujDane(true)} variant="outline">
-                  <PencilIcon className="h-4 w-4 mr-2" /> Edytuj notatki
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Dialog edycji danych pacjenta */}
@@ -617,14 +561,49 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dataUrodzenia">Data urodzenia</Label>
-              <Input
-                id="dataUrodzenia"
-                name="dataUrodzenia"
-                type="date"
-                value={formDane.dataUrodzenia}
-                onChange={handleDaneChange}
-              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="brakPesel"
+                  name="brakPesel"
+                  checked={formDane.brakPesel}
+                  onChange={handleDaneChange}
+                  className="rounded"
+                />
+                <Label htmlFor="brakPesel">Brak numeru PESEL</Label>
+              </div>
+              {!formDane.brakPesel && (
+                <div className="space-y-2">
+                  <Label htmlFor="pesel">Numer PESEL</Label>
+                  <Input
+                    id="pesel"
+                    name="pesel"
+                    type="text"
+                    value={formDane.pesel}
+                    onChange={handleDaneChange}
+                    placeholder="Wprowadź 11-cyfrowy numer PESEL"
+                    maxLength={11}
+                    className={formDane.pesel && !validatePESEL(formDane.pesel) ? "border-red-500" : ""}
+                  />
+                  {formDane.pesel && (
+                    <div className="text-sm">
+                      {validatePESEL(formDane.pesel) ? (
+                        <span className="text-green-600">✓ Numer PESEL jest prawidłowy</span>
+                      ) : (
+                        <span className="text-red-600">✗ Numer PESEL jest nieprawidłowy</span>
+                      )}
+                    </div>
+                  )}
+                  {formDane.pesel && validatePESEL(formDane.pesel) && (
+                    <div className="text-sm text-gray-600">
+                      Data urodzenia: {extractDateFromPESEL(formDane.pesel) ? 
+                        format(extractDateFromPESEL(formDane.pesel)!, "dd MMMM yyyy", { locale: pl }) : 
+                        "Nie można wyciągnąć daty"
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="notatkiOgolne">Notatki ogólne</Label>
@@ -684,21 +663,24 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="opis">Opis wizyty</Label>
+              <Label htmlFor="rodzaj">Rodzaj wizyty</Label>
               <Input
-                id="opis"
-                name="opis"
-                value={formWizyta.opis}
+                id="rodzaj"
+                name="rodzaj"
+                value={formWizyta.rodzaj}
                 onChange={handleWizytaChange}
+                placeholder="np. Przegląd, Leczenie kanałowe, Higienizacja"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="zabiegi">Wykonane zabiegi</Label>
+              <Label htmlFor="notatki">Notatki z wizyty</Label>
               <Textarea
-                id="zabiegi"
-                name="zabiegi"
-                value={formWizyta.zabiegi}
+                id="notatki"
+                name="notatki"
+                value={formWizyta.notatki}
                 onChange={handleWizytaChange}
+                placeholder="Wprowadź notatki z wizyty..."
+                rows={3}
               />
             </div>
           </div>
@@ -717,45 +699,6 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog dodawania/edycji notatki */}
-      <Dialog open={nowaNotatka} onOpenChange={setNowaNotatka}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>
-              {edytowanaNotatka ? "Edytuj notatkę" : "Dodaj nową notatkę"}
-            </DialogTitle>
-            <DialogDescription>
-              {edytowanaNotatka
-                ? "Wprowadź zmiany w notatce"
-                : "Wprowadź treść nowej notatki"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="tresc">Treść notatki</Label>
-              <Textarea
-                id="tresc"
-                name="tresc"
-                rows={6}
-                value={formNotatka.tresc}
-                onChange={handleNotatkaChange}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setNowaNotatka(false);
-                setEdytowanaNotatka(null);
-              }}
-            >
-              Anuluj
-            </Button>
-            <Button onClick={handleNotatkaSubmit}>Zapisz</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

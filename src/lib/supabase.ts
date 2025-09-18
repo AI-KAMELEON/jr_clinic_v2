@@ -21,3 +21,9 @@ export type Pacjent = Tables<"pacjenci">;
 export type Wizyta = Tables<"wizyty">;
 export type WizytaInsert = Inserts<"wizyty">;
 export type WizytaUpdate = Updates<"wizyty">;
+export type Urlop = Tables<"urlopy">;
+export type UrlopInsert = Inserts<"urlopy">;
+export type UrlopUpdate = Updates<"urlopy">;
+
+// Visit status types
+export type VisitStatus = 'zaplanowana' | 'wykonana' | 'odwolana';

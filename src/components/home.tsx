@@ -8,12 +8,12 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, FileText, Plus, LogOut } from "lucide-react";
+import { Calendar, Clock, Users, FileText, Plus, LogOut, CheckCircle, X, Printer } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
 import { AdminManagement } from "./AdminManagement";
-import { supabase } from "@/lib/supabase";
+import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,6 +34,175 @@ const Home = () => {
     loading: true,
     error: null,
   });
+
+  // Funkcje kolorów dla wizyt
+  const getVisitBorderColor = (status: VisitStatus): string => {
+    switch (status) {
+      case 'wykonana':
+        return 'border-l-green-500';
+      case 'odwolana':
+        return 'border-l-red-500';
+      case 'zaplanowana':
+      default:
+        return 'border-l-blue-500';
+    }
+  };
+
+  const getVisitBackgroundColor = (status: VisitStatus): string => {
+    switch (status) {
+      case 'wykonana':
+        return 'bg-green-50';
+      case 'odwolana':
+        return 'bg-red-50';
+      case 'zaplanowana':
+      default:
+        return 'bg-white';
+    }
+  };
+
+  // Funkcja do aktualizacji statusu wizyty
+  const handleUpdateVisitStatus = async (visitId: string, status: VisitStatus) => {
+    try {
+      const { error } = await supabase
+        .from("wizyty")
+        .update({ status })
+        .eq("id", visitId);
+
+      if (error) throw error;
+
+      // Odśwież dane dashboardu
+      await fetchDashboardData();
+    } catch (err) {
+      console.error("Error updating visit status:", err);
+    }
+  };
+
+  // Funkcja do wydruku wizyt na dzisiaj
+  const handlePrintTodayVisits = () => {
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('pl-PL');
+    
+    // Przygotuj zawartość do wydruku
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Wizyty na dzień ${todayStr}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              color: #333;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #333;
+              padding-bottom: 10px;
+              margin-bottom: 20px;
+            }
+            .clinic-name {
+              font-size: 24px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            .date {
+              font-size: 16px;
+              color: #666;
+            }
+            .visit-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 10px 0;
+              border-bottom: 1px solid #eee;
+            }
+            .visit-time {
+              font-weight: bold;
+              min-width: 60px;
+            }
+            .visit-patient {
+              flex: 1;
+              margin-left: 20px;
+            }
+            .visit-type {
+              color: #666;
+              font-size: 14px;
+            }
+            .visit-status {
+              min-width: 100px;
+              text-align: right;
+              font-size: 12px;
+              padding: 2px 8px;
+              border-radius: 4px;
+            }
+            .status-zaplanowana {
+              background-color: #e3f2fd;
+              color: #1976d2;
+            }
+            .status-wykonana {
+              background-color: #e8f5e8;
+              color: #2e7d32;
+            }
+            .status-odwolana {
+              background-color: #ffebee;
+              color: #c62828;
+            }
+            .summary {
+              margin-top: 20px;
+              padding-top: 10px;
+              border-top: 2px solid #333;
+              text-align: center;
+              font-weight: bold;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="clinic-name">KARTOTEKA</div>
+            <div class="date">WIZYTY NA DZIEŃ: ${todayStr}</div>
+          </div>
+          
+          ${dashboardData.todayAppointments.length > 0 ? 
+            dashboardData.todayAppointments.map(appointment => `
+              <div class="visit-item">
+                <div class="visit-time">${appointment.time}</div>
+                <div class="visit-patient">
+                  <div>${appointment.patientName}</div>
+                  <div class="visit-type">${appointment.type}</div>
+                </div>
+                <div class="visit-status status-${appointment.status}">
+                  ${appointment.status === 'zaplanowana' ? 'Zaplanowana' : 
+                    appointment.status === 'wykonana' ? 'Wykonana' : 'Odwołana'}
+                </div>
+              </div>
+            `).join('') : 
+            '<div style="text-align: center; padding: 40px; color: #666;">Brak wizyt na dziś</div>'
+          }
+          
+          <div class="summary">
+            RAZEM: ${dashboardData.todayAppointments.length} wizyt
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Otwórz nowe okno z zawartością do wydruku
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      // Poczekaj na załadowanie i otwórz dialog drukowania
+      printWindow.onload = () => {
+        printWindow.print();
+        printWindow.close();
+      };
+    }
+  };
 
   // Funkcja do pobierania danych dashboardu
   const fetchDashboardData = async () => {
@@ -57,6 +226,7 @@ const Home = () => {
           data,
           godzina,
           rodzaj,
+          status,
           pacjenci!inner(imie, nazwisko, id)
         `)
         .eq("data", today)
@@ -87,6 +257,7 @@ const Home = () => {
         patientName: `${visit.pacjenci.imie} ${visit.pacjenci.nazwisko}`,
         type: visit.rodzaj,
         patientId: visit.pacjenci.id,
+        status: visit.status || 'zaplanowana',
       })) || [];
 
       setDashboardData({
@@ -154,10 +325,13 @@ const Home = () => {
       <header className="border-b bg-white">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xl">
-                DS
-              </span>
+            <div className="w-12 h-10 flex items-center justify-center">
+              <img 
+                src="/logo_jr.jpeg" 
+                alt="JR Logo" 
+                className="w-12 h-10 rounded-lg"
+                style={{ imageRendering: 'crisp-edges' }}
+              />
             </div>
             <h1 className="text-xl font-bold">Klinika Stomatologiczna</h1>
           </div>
@@ -285,10 +459,24 @@ const Home = () => {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Dzisiejsze wizyty</CardTitle>
-                  <CardDescription>
-                    Lista wizyt zaplanowanych na dziś
-                  </CardDescription>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Dzisiejsze wizyty</CardTitle>
+                      <CardDescription>
+                        Lista wizyt zaplanowanych na dziś
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePrintTodayVisits}
+                      className="flex items-center space-x-2"
+                      disabled={dashboardData.loading}
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span>Drukuj</span>
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {dashboardData.loading ? (
@@ -300,11 +488,7 @@ const Home = () => {
                       {dashboardData.todayAppointments.map((appointment) => (
                         <div
                           key={appointment.id}
-                          className="flex items-center justify-between border-b pb-2 cursor-pointer hover:bg-muted/50 rounded-md p-2 transition-colors"
-                          onClick={() =>
-                            handlePatientSelect(appointment.patientId)
-                          }
-                          title={`Przejdź do karty pacjenta: ${appointment.patientName}`}
+                          className={`flex items-center justify-between border-l-4 ${getVisitBorderColor(appointment.status)} ${getVisitBackgroundColor(appointment.status)} rounded-md p-3 transition-colors`}
                         >
                           <div className="flex items-center">
                             <div className="bg-primary/10 text-primary rounded-md p-2 mr-3">
@@ -319,8 +503,50 @@ const Home = () => {
                               </p>
                             </div>
                           </div>
-                          <div className="text-sm font-medium">
-                            {appointment.time}
+                          <div className="flex items-center space-x-2">
+                            <div className="text-sm font-medium">
+                              {appointment.time}
+                            </div>
+                            {appointment.status === 'zaplanowana' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateVisitStatus(appointment.id, 'wykonana');
+                                  }}
+                                  className="text-green-600 hover:text-green-700 p-1"
+                                  title="Oznacz jako wykonaną"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateVisitStatus(appointment.id, 'odwolana');
+                                  }}
+                                  className="text-red-600 hover:text-red-700 p-1"
+                                  title="Oznacz jako odwołaną"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePatientSelect(appointment.patientId);
+                              }}
+                              className="text-blue-600 hover:text-blue-700 p-1"
+                              title="Przejdź do karty pacjenta"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -365,8 +591,12 @@ const Home = () => {
             </TabsContent>
 
             <TabsContent value="kalendarz">
-              <KalendarzWizyt onNavigateToPatients={() => setActiveTab("pacjenci")} />
+              <KalendarzWizyt 
+                onNavigateToPatients={() => setActiveTab("pacjenci")} 
+                onPatientSelect={handlePatientSelect}
+              />
             </TabsContent>
+
 
             <TabsContent value="karta-pacjenta">
               {selectedPatientId && <KartaPacjenta pacjentId={selectedPatientId} />}

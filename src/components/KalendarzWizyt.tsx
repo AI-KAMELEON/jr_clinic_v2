@@ -54,6 +54,9 @@ import {
   type Pacjent,
   type Wizyta,
   type WizytaInsert,
+  type Urlop,
+  type UrlopInsert,
+  type VisitStatus,
 } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
@@ -64,6 +67,7 @@ interface WizytaWithPacjent extends Wizyta {
 
 interface KalendarzWizytProps {
   onNavigateToPatients?: () => void;
+  onPatientSelect?: (patientId: string) => void;
 }
 
 interface GodzinyPracy {
@@ -81,17 +85,20 @@ interface PlanPracy {
   niedziela: { aktywny: boolean; godziny: GodzinyPracy };
 }
 
-const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
+const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date(),
   );
+  const selectedDateStr = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
   const [selectedView, setSelectedView] = useState("dzien");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isWorkScheduleDialogOpen, setIsWorkScheduleDialogOpen] =
     useState(false);
+  const [isVacationDialogOpen, setIsVacationDialogOpen] = useState(false);
   const [selectedWizyta, setSelectedWizyta] =
     useState<WizytaWithPacjent | null>(null);
+  const [selectedUrlop, setSelectedUrlop] = useState<Urlop | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchingSlots, setSearchingSlots] = useState(false);
@@ -114,6 +121,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
 
   const [wizyty, setWizyty] = useState<WizytaWithPacjent[]>([]);
   const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
+  const [urlopy, setUrlopy] = useState<Urlop[]>([]);
   const [searchResults, setSearchResults] = useState<Pacjent[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -125,7 +133,15 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
     godzina: "08:00:00",
     rodzaj: "Przegląd",
     notatki: "",
+    status: "zaplanowana",
   });
+
+  const [nowyUrlop, setNowyUrlop] = useState<Partial<UrlopInsert>>({
+    data_od: format(new Date(), "yyyy-MM-dd"),
+    data_do: format(new Date(), "yyyy-MM-dd"),
+    opis: "",
+  });
+
 
   const godzinyPrzyjec = [
     "08:00:00",
@@ -151,15 +167,42 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
   ];
 
   const rodzajeWizyt = [
-    "Przegląd",
-    "Konsultacja",
-    "Wypełnienie",
-    "Leczenie kanałowe",
-    "Ekstrakcja",
-    "Higienizacja",
-    "Protetyka",
-    "Ortodoncja",
-    "Inne",
+    "LECZENIE",
+    "GUMKI",
+    "ZAŁOŻENIE APARATU GÓRA",
+    "ZAŁOŻENIE APARATU DÓŁ",
+    "ZDJĘCIE APARATU GÓRA",
+    "ZDJĘCIE APARATU DÓŁ",
+    "WYRWANIE ZĘBA",
+    "PORCELANA GÓRA",
+    "PORCELANA DÓŁ",
+    "LICÓWKI GÓRA",
+    "LICÓWKI DÓŁ",
+    "BONDING GÓRA",
+    "BONDING DÓŁ",
+    "KORONY GÓRA",
+    "KORONY DÓŁ",
+    "MOST GÓRA",
+    "MOST DÓŁ",
+    "PROTEZA GÓRA",
+    "PROTEZA DÓŁ",
+    "POPRAWA LICÓWKI",
+    "POPRAWA BONDING",
+    "POPRAWA KORON",
+    "POPRAWA PORCELANY",
+    "POPRAWA PROTEZY",
+    "PRZEGLĄD",
+    "LAKIEROWANIE",
+    "KAMIEŃ",
+    "WYBIELANIE",
+    "PLOMBA",
+    "SZLIFOWANIE",
+    "UKRUSZONY ZĄB",
+    "BOTOX",
+    "NICI",
+    "USTA",
+    "GAZ",
+    "KONSULTACJA",
   ];
 
   // Fetch pacjenci from database
@@ -268,12 +311,35 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
         .order("godzina");
 
       if (error) throw error;
+      console.log("Fetched wizyty:", data);
       setWizyty(data || []);
     } catch (err) {
       console.error("Error fetching wizyty:", err);
       setError("Błąd podczas pobierania wizyt");
     }
   };
+
+  // Fetch urlopy from database
+  const fetchUrlopy = async () => {
+    try {
+      console.log("Fetching urlopy...");
+      const { data, error } = await supabase
+        .from("urlopy")
+        .select("*")
+        .order("data_od");
+
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+      console.log("Urlopy fetched:", data);
+      setUrlopy(data || []);
+    } catch (err) {
+      console.error("Error fetching urlopy:", err);
+      setError(`Błąd podczas pobierania urlopów: ${err.message || err.toString()}`);
+    }
+  };
+
 
   // Get day name in Polish
   const getDayName = (date: Date): keyof PlanPracy => {
@@ -296,6 +362,47 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
     return planPracy[dayName].aktywny;
   };
 
+  // Check if date is a vacation day
+  const isVacationDay = (date: string): boolean => {
+    const dateObj = new Date(date + "T00:00:00");
+    return urlopy.some(urlop => {
+      const startDate = new Date(urlop.data_od + "T00:00:00");
+      const endDate = new Date(urlop.data_do + "T00:00:00");
+      return dateObj >= startDate && dateObj <= endDate;
+    });
+  };
+
+  // Check if date is available for appointments (working day and not vacation)
+  const isDateAvailable = (date: string): boolean => {
+    return isWorkingDay(date) && !isVacationDay(date);
+  };
+
+  // Get visit border color based on status
+  const getVisitBorderColor = (status: VisitStatus): string => {
+    switch (status) {
+      case 'wykonana':
+        return 'border-l-green-500';
+      case 'odwolana':
+        return 'border-l-red-500';
+      case 'zaplanowana':
+      default:
+        return 'border-l-blue-500';
+    }
+  };
+
+  // Get visit background color based on status
+  const getVisitBackgroundColor = (status: VisitStatus): string => {
+    switch (status) {
+      case 'wykonana':
+        return 'bg-green-50';
+      case 'odwolana':
+        return 'bg-red-50';
+      case 'zaplanowana':
+      default:
+        return 'bg-white';
+    }
+  };
+
   // Check if time is within working hours
   const isWithinWorkingHours = (date: string, time: string): boolean => {
     if (!isWorkingDay(date)) return false;
@@ -314,8 +421,22 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
     godzina: string,
     excludeId?: string,
   ) => {
+    // Check if date is available (working day and not vacation)
+    if (!isDateAvailable(data)) {
+      return false;
+    }
+
     // Check if it's within working hours
     if (!isWithinWorkingHours(data, godzina)) {
+      return false;
+    }
+
+    // Check if time hasn't passed (for today)
+    const now = new Date();
+    const todayStr = format(now, "yyyy-MM-dd");
+    const currentTime = format(now, "HH:mm:ss");
+    
+    if (data === todayStr && godzina <= currentTime) {
       return false;
     }
 
@@ -331,6 +452,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
   useEffect(() => {
     fetchPacjenci();
     fetchWizyty();
+    fetchUrlopy();
   }, []);
 
   const handleAddWizyta = () => {
@@ -343,7 +465,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
         ? format(selectedDate, "yyyy-MM-dd")
         : format(new Date(), "yyyy-MM-dd"),
       godzina: "08:00:00",
-      rodzaj: "Przegląd",
+      rodzaj: "PRZEGLĄD",
       notatki: "",
     });
     setError(null);
@@ -361,6 +483,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
       godzina: wizyta.godzina,
       rodzaj: wizyta.rodzaj,
       notatki: wizyta.notatki,
+      status: wizyta.status || "zaplanowana",
     });
     setError(null);
     setIsDialogOpen(true);
@@ -369,6 +492,31 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
   const handleDeleteWizyta = (wizyta: WizytaWithPacjent) => {
     setSelectedWizyta(wizyta);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleWizytaClick = (wizyta: WizytaWithPacjent) => {
+    if (onPatientSelect) {
+      onPatientSelect(wizyta.pacjenci.id);
+    }
+  };
+
+  const handleUpdateVisitStatus = async (wizyta: WizytaWithPacjent, status: VisitStatus) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("wizyty")
+        .update({ status })
+        .eq("id", wizyta.id);
+
+      if (error) throw error;
+
+      await fetchWizyty();
+    } catch (err) {
+      console.error("Error updating visit status:", err);
+      setError("Błąd podczas aktualizacji statusu wizyty");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -406,7 +554,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
     }
 
     // Check if time slot is available
-    // Check if time slot is available (includes working hours check)
+    // Check if time slot is available (includes working hours and vacation check)
     if (
       !isTimeSlotAvailable(
         nowaWizyta.data,
@@ -414,7 +562,16 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
         selectedWizyta?.id,
       )
     ) {
-      if (!isWorkingDay(nowaWizyta.data)) {
+      // Check if time has passed (for today)
+      const now = new Date();
+      const todayStr = format(now, "yyyy-MM-dd");
+      const currentTime = format(now, "HH:mm:ss");
+      
+      if (nowaWizyta.data === todayStr && nowaWizyta.godzina <= currentTime) {
+        setError("Nie można dodać wizyty na przeszłą godzinę. Wybierz przyszły termin.");
+      } else if (isVacationDay(nowaWizyta.data)) {
+        setError("Wybrany dzień jest dniem urlopowym. Klinika nie pracuje w tym terminie.");
+      } else if (!isWorkingDay(nowaWizyta.data)) {
         setError("Wybrany dzień nie jest dniem roboczym.");
       } else if (!isWithinWorkingHours(nowaWizyta.data, nowaWizyta.godzina)) {
         setError("Wybrana godzina jest poza godzinami pracy kliniki.");
@@ -438,6 +595,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
             godzina: nowaWizyta.godzina,
             rodzaj: nowaWizyta.rodzaj,
             notatki: nowaWizyta.notatki || "",
+            status: nowaWizyta.status || "zaplanowana",
           })
           .eq("id", selectedWizyta.id);
 
@@ -450,6 +608,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
           godzina: nowaWizyta.godzina,
           rodzaj: nowaWizyta.rodzaj,
           notatki: nowaWizyta.notatki || "",
+          status: nowaWizyta.status || "zaplanowana",
         });
 
         if (error) throw error;
@@ -463,7 +622,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
           ? format(selectedDate, "yyyy-MM-dd")
           : format(new Date(), "yyyy-MM-dd"),
         godzina: "08:00:00",
-        rodzaj: "Przegląd",
+        rodzaj: "PRZEGLĄD",
         notatki: "",
       });
       setSelectedWizyta(null);
@@ -494,6 +653,194 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
     })
     .sort((a, b) => a.godzina.localeCompare(b.godzina));
 
+  // Funkcje pomocnicze dla widoków
+  const getWeekDates = (date: Date) => {
+    const startOfWeek = new Date(date);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    startOfWeek.setDate(diff);
+    
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      weekDates.push(date);
+    }
+    return weekDates;
+  };
+
+  const getMonthDates = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Get first Monday of the month (or previous Monday if month doesn't start on Monday)
+    const startDate = new Date(firstDay);
+    const dayOfWeek = firstDay.getDay();
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startDate.setDate(firstDay.getDate() - daysToSubtract);
+    
+    const monthDates = [];
+    const currentDate = new Date(startDate);
+    
+    // Generate 42 days (6 weeks) to cover the month
+    for (let i = 0; i < 42; i++) {
+      monthDates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return monthDates;
+  };
+
+  const getWizytyForDate = (date: Date) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    return wizyty
+      .filter((wizyta) => wizyta.data === dateStr)
+      .sort((a, b) => a.godzina.localeCompare(b.godzina));
+  };
+
+  const weekDates = selectedDate ? getWeekDates(selectedDate) : [];
+  const monthDates = selectedDate ? getMonthDates(selectedDate) : [];
+
+  // Funkcje nawigacji
+  const goToPreviousWeek = () => {
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setSelectedDate(newDate);
+    }
+  };
+
+  const goToNextWeek = () => {
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setSelectedDate(newDate);
+    }
+  };
+
+  const goToPreviousMonth = () => {
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setMonth(newDate.getMonth() - 1);
+      setSelectedDate(newDate);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setMonth(newDate.getMonth() + 1);
+      setSelectedDate(newDate);
+    }
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  // Vacation management functions
+  const handleAddVacation = () => {
+    setSelectedUrlop(null);
+    setNowyUrlop({
+      data_od: selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+      data_do: selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+      opis: "",
+    });
+    setIsVacationDialogOpen(true);
+  };
+
+  const handleEditVacation = (urlop: Urlop) => {
+    setSelectedUrlop(urlop);
+    setNowyUrlop({
+      data_od: urlop.data_od,
+      data_do: urlop.data_do,
+      opis: urlop.opis || "",
+    });
+    setIsVacationDialogOpen(true);
+  };
+
+  const handleDeleteVacation = async (urlop: Urlop) => {
+    if (!confirm(`Czy na pewno chcesz usunąć urlop od ${urlop.data_od} do ${urlop.data_do}?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("urlopy")
+        .delete()
+        .eq("id", urlop.id);
+
+      if (error) throw error;
+
+      await fetchUrlopy();
+    } catch (err) {
+      console.error("Error deleting vacation:", err);
+      setError("Błąd podczas usuwania urlopu");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveVacation = async () => {
+    if (!nowyUrlop.data_od || !nowyUrlop.data_do) {
+      setError("Wszystkie pola są wymagane");
+      return;
+    }
+
+    if (new Date(nowyUrlop.data_od) > new Date(nowyUrlop.data_do)) {
+      setError("Data końcowa nie może być wcześniejsza niż data początkowa");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (selectedUrlop) {
+        // Update existing vacation
+        const { error } = await supabase
+          .from("urlopy")
+          .update({
+            data_od: nowyUrlop.data_od,
+            data_do: nowyUrlop.data_do,
+            opis: nowyUrlop.opis || "",
+          })
+          .eq("id", selectedUrlop.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new vacation
+        const { error } = await supabase
+          .from("urlopy")
+          .insert({
+            data_od: nowyUrlop.data_od,
+            data_do: nowyUrlop.data_do,
+            opis: nowyUrlop.opis || "",
+          });
+
+        if (error) throw error;
+      }
+
+      await fetchUrlopy();
+      setIsVacationDialogOpen(false);
+      setNowyUrlop({
+        data_od: format(new Date(), "yyyy-MM-dd"),
+        data_do: format(new Date(), "yyyy-MM-dd"),
+        opis: "",
+      });
+      setSelectedUrlop(null);
+    } catch (err: any) {
+      console.error("Error saving vacation:", err);
+      setError(`Błąd podczas zapisywania urlopu: ${err.message || err.toString()}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const znajdzNajblizszeTerminy = async (
     startDate: Date = new Date(),
     limit: number = 10,
@@ -507,20 +854,28 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
       let currentDate = new Date(startDate);
       let daysChecked = 0;
       const maxDaysToCheck = 60; // Sprawdź maksymalnie 60 dni w przód
+      const now = new Date();
+      const todayStr = format(now, "yyyy-MM-dd");
+      const currentTime = format(now, "HH:mm:ss");
 
       while (slots.length < limit && daysChecked < maxDaysToCheck) {
-        // Sprawdź czy to dzień roboczy według planu pracy
+        // Sprawdź czy to dzień dostępny (roboczy i nie urlop)
         const dataStr = format(currentDate, "yyyy-MM-dd");
-        if (isWorkingDay(dataStr)) {
+        if (isDateAvailable(dataStr)) {
           const zajeteGodziny = wizyty
             .filter((w) => w.data === dataStr)
             .map((w) => w.godzina);
 
           // Filtruj godziny według planu pracy i zajętości
-          const wolneGodziny = godzinyPrzyjec.filter(
+          let wolneGodziny = godzinyPrzyjec.filter(
             (g) =>
               !zajeteGodziny.includes(g) && isWithinWorkingHours(dataStr, g),
           );
+
+          // Jeśli to dzisiaj, usuń godziny które już minęły
+          if (dataStr === todayStr) {
+            wolneGodziny = wolneGodziny.filter(godzina => godzina > currentTime);
+          }
 
           // Dodaj wszystkie wolne godziny z tego dnia
           for (const godzina of wolneGodziny) {
@@ -619,6 +974,14 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
                 </Button>
                 <Button
                   variant="outline"
+                  onClick={handleAddVacation}
+                  className="w-full"
+                  disabled={loading}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" /> Zarządzaj urlopami
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => znajdzNajblizszeTerminy()}
                   className="w-full"
                   disabled={loading || searchingSlots}
@@ -709,25 +1072,53 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
               >
                 <TabsContent value="dzien" className="mt-0">
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Wizyty na dziś</h3>
+                    <div className="text-center">
+                      {isVacationDay(selectedDateStr) ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <h3 className="text-lg font-medium text-red-600 mb-2">
+                            {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
+                          </h3>
+                          <p className="text-red-500">Dzień urlopowy - klinika nie pracuje</p>
+                        </div>
+                      ) : isWorkingDay(selectedDateStr) ? (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                          <h3 className="text-lg font-medium text-green-600 mb-2">
+                            {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
+                          </h3>
+                          <p className="text-green-600">
+                            Godziny pracy: {planPracy[getDayName(selectedDate)].godziny.od} - {planPracy[getDayName(selectedDate)].godziny.do}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <h3 className="text-lg font-medium text-gray-600 mb-2">
+                            {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
+                          </h3>
+                          <p className="text-gray-500">Dzień wolny od pracy</p>
+                        </div>
+                      )}
+                    </div>
+                    <h3 className="text-lg font-medium">Wizyty na wybrany dzień</h3>
                     <ScrollArea className="h-[500px] pr-4">
                       {wizytyNaDzien.length > 0 ? (
                         <div className="space-y-4">
                           {wizytyNaDzien.map((wizyta) => (
                             <Card
                               key={wizyta.id}
-                              className="border-l-4 border-l-blue-500"
+                              className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
+                              onClick={() => handleWizytaClick(wizyta)}
+                              title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
                             >
                               <CardContent className="p-4">
                                 <div className="flex justify-between items-start">
-                                  <div>
+                                  <div className="flex-1">
                                     <div className="flex items-center mb-2">
                                       <Clock className="h-4 w-4 mr-2 text-gray-500" />
                                       <span className="font-medium">
                                         {wizyta.godzina.substring(0, 5)}
                                       </span>
                                     </div>
-                                    <h4 className="text-lg font-semibold">
+                                    <h4 className="text-lg font-semibold hover:text-blue-600 transition-colors">
                                       {wizyta.pacjenci.imie}{" "}
                                       {wizyta.pacjenci.nazwisko}
                                     </h4>
@@ -740,7 +1131,29 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
                                       </p>
                                     )}
                                   </div>
-                                  <div className="flex space-x-2">
+                                  <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+                                    {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                          disabled={loading}
+                                          className="text-green-600 hover:text-green-700"
+                                        >
+                                          <CheckCircle className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                          disabled={loading}
+                                          className="text-red-600 hover:text-red-700"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -773,14 +1186,211 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
                 </TabsContent>
 
                 <TabsContent value="tydzien">
-                  <div className="text-center py-10 text-gray-500">
-                    Widok tygodniowy będzie dostępny wkrótce
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        Tydzień {selectedDate ? 
+                          `${format(weekDates[0], "d MMM", { locale: pl })} - ${format(weekDates[6], "d MMM yyyy", { locale: pl })}` : 
+                          "Wybierz datę"
+                        }
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToPreviousWeek}
+                          disabled={loading}
+                        >
+                          ← Poprzedni
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToToday}
+                          disabled={loading}
+                        >
+                          Dzisiaj
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToNextWeek}
+                          disabled={loading}
+                        >
+                          Następny →
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-7 gap-2">
+                      {weekDates.map((date, index) => {
+                        const dayWizyty = getWizytyForDate(date);
+                        const isToday = format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+                        const isSelected = selectedDate && format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                        const isVacation = isVacationDay(format(date, "yyyy-MM-dd"));
+                        const isWorking = isWorkingDay(format(date, "yyyy-MM-dd"));
+                        
+                        return (
+                          <div
+                            key={index}
+                            className={`border rounded-lg p-2 min-h-[120px] ${
+                              isVacation ? "bg-red-50 border-red-200" :
+                              isToday ? "bg-blue-50 border-blue-200" : 
+                              isSelected ? "bg-gray-50 border-gray-300" : 
+                              isWorking ? "bg-white border-gray-200" :
+                              "bg-gray-100 border-gray-200"
+                            }`}
+                            onClick={() => setSelectedDate(date)}
+                          >
+                            <div className="text-center mb-2">
+                              <div className="text-sm font-medium text-gray-600">
+                                {format(date, "EEE", { locale: pl })}
+                              </div>
+                              <div className={`text-lg font-semibold ${
+                                isToday ? "text-blue-600" : 
+                                isSelected ? "text-gray-900" : 
+                                "text-gray-700"
+                              }`}>
+                                {format(date, "d")}
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-1">
+                              {dayWizyty.slice(0, 3).map((wizyta) => (
+                                <div
+                                  key={wizyta.id}
+                                  className="text-xs p-1 bg-blue-100 text-blue-800 rounded cursor-pointer hover:bg-blue-200 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWizytaClick(wizyta);
+                                  }}
+                                  title={`${wizyta.godzina.substring(0, 5)} - ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
+                                >
+                                  <div className="font-medium">
+                                    {wizyta.godzina.substring(0, 5)}
+                                  </div>
+                                  <div className="truncate">
+                                    {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                  </div>
+                                </div>
+                              ))}
+                              {dayWizyty.length > 3 && (
+                                <div className="text-xs text-gray-500 text-center">
+                                  +{dayWizyty.length - 3} więcej
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="miesiac">
-                  <div className="text-center py-10 text-gray-500">
-                    Widok miesięczny będzie dostępny wkrótce
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        {selectedDate ? format(selectedDate, "MMMM yyyy", { locale: pl }) : "Wybierz datę"}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToPreviousMonth}
+                          disabled={loading}
+                        >
+                          ← Poprzedni
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToToday}
+                          disabled={loading}
+                        >
+                          Dzisiaj
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToNextMonth}
+                          disabled={loading}
+                        >
+                          Następny →
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-7 gap-1">
+                      {/* Nagłówki dni tygodnia */}
+                      {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'].map((day) => (
+                        <div key={day} className="p-2 text-center text-sm font-medium text-gray-600 bg-gray-50">
+                          {day}
+                        </div>
+                      ))}
+                      
+                      {/* Dni miesiąca */}
+                      {monthDates.map((date, index) => {
+                        const dayWizyty = getWizytyForDate(date);
+                        const isToday = format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+                        const isCurrentMonth = date.getMonth() === (selectedDate?.getMonth() || new Date().getMonth());
+                        const isSelected = selectedDate && format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                        const isVacation = isVacationDay(format(date, "yyyy-MM-dd"));
+                        const isWorking = isWorkingDay(format(date, "yyyy-MM-dd"));
+                        
+                        return (
+                          <div
+                            key={index}
+                            className={`border rounded-lg p-1 min-h-[80px] cursor-pointer transition-colors ${
+                              isVacation ? "bg-red-50 border-red-200" :
+                              isToday ? "bg-blue-50 border-blue-200" : 
+                              isSelected ? "bg-gray-50 border-gray-300" : 
+                              isCurrentMonth && isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : 
+                              isCurrentMonth ? "bg-gray-100 border-gray-200" :
+                              "bg-gray-50 border-gray-100 text-gray-400"
+                            }`}
+                            onClick={() => setSelectedDate(date)}
+                          >
+                            <div className="text-center mb-1">
+                              <div className={`text-sm font-medium ${
+                                isToday ? "text-blue-600" : 
+                                isSelected ? "text-gray-900" : 
+                                isCurrentMonth ? "text-gray-700" : 
+                                "text-gray-400"
+                              }`}>
+                                {format(date, "d")}
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-0.5">
+                              {dayWizyty.slice(0, 2).map((wizyta) => (
+                                <div
+                                  key={wizyta.id}
+                                  className="text-xs p-0.5 bg-blue-100 text-blue-800 rounded cursor-pointer hover:bg-blue-200 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWizytaClick(wizyta);
+                                  }}
+                                  title={`${wizyta.godzina.substring(0, 5)} - ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
+                                >
+                                  <div className="font-medium truncate">
+                                    {wizyta.godzina.substring(0, 5)}
+                                  </div>
+                                  <div className="truncate text-xs">
+                                    {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                  </div>
+                                </div>
+                              ))}
+                              {dayWizyty.length > 2 && (
+                                <div className="text-xs text-gray-500 text-center">
+                                  +{dayWizyty.length - 2}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -916,7 +1526,7 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
                     } else if (!isInWorkingHours) {
                       statusText = "(poza godzinami pracy)";
                     } else if (!isAvailable) {
-                      statusText = "(zajęte)";
+                      statusText = "(termin niedostępny)";
                     }
 
                     return (
@@ -1228,6 +1838,120 @@ const KalendarzWizyt = ({ onNavigateToPatients }: KalendarzWizytProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog zarządzania urlopami */}
+      <Dialog open={isVacationDialogOpen} onOpenChange={setIsVacationDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedUrlop ? "Edytuj urlop" : "Dodaj nowy urlop"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="data_od">Data początkowa</Label>
+                  <Input
+                    id="data_od"
+                    type="date"
+                    value={nowyUrlop.data_od || ""}
+                    onChange={(e) =>
+                      setNowyUrlop({ ...nowyUrlop, data_od: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="data_do">Data końcowa</Label>
+                  <Input
+                    id="data_do"
+                    type="date"
+                    value={nowyUrlop.data_do || ""}
+                    onChange={(e) =>
+                      setNowyUrlop({ ...nowyUrlop, data_do: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="opis">Opis urlopu (opcjonalnie)</Label>
+                <Input
+                  id="opis"
+                  value={nowyUrlop.opis || ""}
+                  onChange={(e) =>
+                    setNowyUrlop({ ...nowyUrlop, opis: e.target.value })
+                  }
+                  placeholder="np. Wakacje, Święta, Szkolenie"
+                />
+              </div>
+              
+              {/* Lista istniejących urlopów */}
+              <div className="space-y-2">
+                <Label>Istniejące urlopy</Label>
+                <ScrollArea className="h-[200px] border rounded-md p-2">
+                  {urlopy.length > 0 ? (
+                    <div className="space-y-2">
+                      {urlopy.map((urlop) => (
+                        <div
+                          key={urlop.id}
+                          className="flex items-center justify-between p-2 border rounded-md bg-gray-50"
+                        >
+                          <div>
+                            <div className="font-medium">
+                              {format(new Date(urlop.data_od), "dd.MM.yyyy", { locale: pl })} - 
+                              {format(new Date(urlop.data_do), "dd.MM.yyyy", { locale: pl })}
+                            </div>
+                            {urlop.opis && (
+                              <div className="text-sm text-gray-600">{urlop.opis}</div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditVacation(urlop)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteVacation(urlop)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      Brak urlopów
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsVacationDialogOpen(false)}
+              disabled={loading}
+            >
+              Anuluj
+            </Button>
+            <Button onClick={handleSaveVacation} disabled={loading}>
+              {loading
+                ? "Zapisywanie..."
+                : selectedUrlop
+                  ? "Zapisz zmiany"
+                  : "Dodaj urlop"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

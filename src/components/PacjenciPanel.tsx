@@ -31,6 +31,7 @@ import {
 import { supabase, type Pacjent } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { validatePESEL, extractDateFromPESEL, formatPESEL } from "@/lib/utils";
 
 
 interface PacjenciPanelProps {
@@ -85,19 +86,48 @@ const PacjenciPanel = ({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const pesel = formData.get("pesel") as string;
+    const brakPesel = formData.get("brakPesel") === "on";
+    
+    // Walidacja PESEL
+    if (!brakPesel && pesel && !validatePESEL(pesel)) {
+      setError("Nieprawidłowy numer PESEL");
+      return;
+    }
+    
     try {
       setLoading(true);
-          const { data, error } = await supabase
-            .from("pacjenci")
-            .insert({
-              imie: formData.get("imie") as string,
-              nazwisko: formData.get("nazwisko") as string,
-              telefon: formData.get("telefon") as string,
-              notatki: (formData.get("notatki") as string) || "",
-              adres: (formData.get("adres") as string) || null,
-              data_urodzenia: (formData.get("dataUrodzenia") as string) || null,
-              email: (formData.get("email") as string) || null,
-            })
+      
+      // Przygotuj dane do wstawienia
+      const insertData: any = {
+        imie: formData.get("imie") as string,
+        nazwisko: formData.get("nazwisko") as string,
+        telefon: formData.get("telefon") as string,
+        notatki: (formData.get("notatki") as string) || "",
+        adres: (formData.get("adres") as string) || null,
+        email: (formData.get("email") as string) || null,
+      };
+
+      // Dodaj PESEL tylko jeśli kolumny istnieją
+      // Sprawdź czy kolumny PESEL istnieją w bazie
+      try {
+        if (pesel && !brakPesel) {
+          insertData.pesel = pesel;
+          insertData.brak_pesel = false;
+        } else if (brakPesel) {
+          insertData.pesel = null;
+          insertData.brak_pesel = true;
+        }
+      } catch (peselError) {
+        console.log("PESEL columns may not exist, skipping PESEL data");
+        // Nie dodawaj PESEL jeśli kolumny nie istnieją
+      }
+
+      console.log("Inserting data:", insertData);
+
+      const { data, error } = await supabase
+        .from("pacjenci")
+        .insert(insertData)
         .select()
         .single();
 
@@ -113,7 +143,17 @@ const PacjenciPanel = ({
       }
     } catch (err) {
       console.error("Error adding pacjent:", err);
-      setError("Błąd podczas dodawania pacjenta");
+      console.error("Form data:", {
+        imie: formData.get("imie"),
+        nazwisko: formData.get("nazwisko"),
+        telefon: formData.get("telefon"),
+        email: formData.get("email"),
+        adres: formData.get("adres"),
+        pesel: pesel,
+        brakPesel: brakPesel,
+        notatki: formData.get("notatki")
+      });
+      setError(`Błąd podczas dodawania pacjenta: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -125,6 +165,15 @@ const PacjenciPanel = ({
 
     const formData = new FormData(e.currentTarget);
     
+    const pesel = formData.get("pesel") as string;
+    const brakPesel = formData.get("brakPesel") === "on";
+    
+    // Walidacja PESEL
+    if (!brakPesel && pesel && !validatePESEL(pesel)) {
+      setError("Nieprawidłowy numer PESEL");
+      return;
+    }
+    
     try {
       setLoading(true);
           const { data, error } = await supabase
@@ -135,7 +184,8 @@ const PacjenciPanel = ({
               telefon: formData.get("telefon") as string,
               notatki: (formData.get("notatki") as string) || "",
               adres: (formData.get("adres") as string) || null,
-              data_urodzenia: (formData.get("dataUrodzenia") as string) || null,
+              pesel: brakPesel ? null : pesel || null,
+              brak_pesel: brakPesel,
               email: (formData.get("email") as string) || null,
             })
         .eq("id", currentPacjent.id)
@@ -329,15 +379,69 @@ const PacjenciPanel = ({
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="dataUrodzenia" className="text-right">
-                          Data urodzenia
+                        <Label htmlFor="brakPesel" className="text-right">
+                          Brak numeru PESEL
                         </Label>
-                        <Input
-                          id="dataUrodzenia"
-                          name="dataUrodzenia"
-                          type="date"
-                          className="col-span-3"
-                        />
+                        <div className="col-span-3 flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="brakPesel"
+                            name="brakPesel"
+                            className="rounded"
+                            onChange={(e) => {
+                              const peselInput = document.getElementById('pesel') as HTMLInputElement;
+                              if (peselInput) {
+                                peselInput.disabled = e.target.checked;
+                                if (e.target.checked) {
+                                  peselInput.value = '';
+                                }
+                              }
+                            }}
+                          />
+                          <Label htmlFor="brakPesel" className="text-sm">
+                            Pacjent nie posiada numeru PESEL
+                          </Label>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="pesel" className="text-right">
+                          Numer PESEL
+                        </Label>
+                        <div className="col-span-3">
+                          <Input
+                            id="pesel"
+                            name="pesel"
+                            type="text"
+                            placeholder="12345678901"
+                            maxLength={11}
+                            className="font-mono"
+                            onChange={(e) => {
+                              // Formatuj PESEL podczas wpisywania
+                              const value = e.target.value.replace(/\D/g, '');
+                              e.target.value = value;
+                              
+                              // Walidacja w czasie rzeczywistym
+                              if (value.length === 11) {
+                                const isValid = validatePESEL(value);
+                                const extractedDate = extractDateFromPESEL(value);
+                                
+                                if (isValid && extractedDate) {
+                                  e.target.style.borderColor = '#10b981';
+                                  e.target.title = `Prawidłowy PESEL. Data urodzenia: ${extractedDate.toLocaleDateString('pl-PL')}`;
+                                } else {
+                                  e.target.style.borderColor = '#ef4444';
+                                  e.target.title = 'Nieprawidłowy numer PESEL';
+                                }
+                              } else {
+                                e.target.style.borderColor = '';
+                                e.target.title = '';
+                              }
+                            }}
+                          />
+                          <div className="text-xs text-gray-500 mt-1">
+                            Wprowadź 11-cyfrowy numer PESEL
+                          </div>
+                        </div>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="notatki" className="text-right">
@@ -512,16 +616,72 @@ const PacjenciPanel = ({
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-dataUrodzenia" className="text-right">
-                    Data urodzenia
+                  <Label htmlFor="edit-brakPesel" className="text-right">
+                    Brak numeru PESEL
                   </Label>
-                  <Input
-                    id="edit-dataUrodzenia"
-                    name="dataUrodzenia"
-                    type="date"
-                    className="col-span-3"
-                    defaultValue={currentPacjent.data_urodzenia ? new Date(currentPacjent.data_urodzenia).toISOString().split('T')[0] : ""}
-                  />
+                  <div className="col-span-3 flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="edit-brakPesel"
+                      name="brakPesel"
+                      className="rounded"
+                      defaultChecked={currentPacjent?.brak_pesel || false}
+                      onChange={(e) => {
+                        const peselInput = document.getElementById('edit-pesel') as HTMLInputElement;
+                        if (peselInput) {
+                          peselInput.disabled = e.target.checked;
+                          if (e.target.checked) {
+                            peselInput.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <Label htmlFor="edit-brakPesel" className="text-sm">
+                      Pacjent nie posiada numeru PESEL
+                    </Label>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-pesel" className="text-right">
+                    Numer PESEL
+                  </Label>
+                  <div className="col-span-3">
+                    <Input
+                      id="edit-pesel"
+                      name="pesel"
+                      type="text"
+                      placeholder="12345678901"
+                      maxLength={11}
+                      className="font-mono"
+                      defaultValue={currentPacjent?.pesel || ""}
+                      disabled={currentPacjent?.brak_pesel || false}
+                      onChange={(e) => {
+                        // Formatuj PESEL podczas wpisywania
+                        const value = e.target.value.replace(/\D/g, '');
+                        e.target.value = value;
+                        
+                        // Walidacja w czasie rzeczywistym
+                        if (value.length === 11) {
+                          const isValid = validatePESEL(value);
+                          const extractedDate = extractDateFromPESEL(value);
+                          
+                          if (isValid && extractedDate) {
+                            e.target.style.borderColor = '#10b981';
+                            e.target.title = `Prawidłowy PESEL. Data urodzenia: ${extractedDate.toLocaleDateString('pl-PL')}`;
+                          } else {
+                            e.target.style.borderColor = '#ef4444';
+                            e.target.title = 'Nieprawidłowy numer PESEL';
+                          }
+                        } else {
+                          e.target.style.borderColor = '';
+                          e.target.title = '';
+                        }
+                      }}
+                    />
+                    <div className="text-xs text-gray-500 mt-1">
+                      Wprowadź 11-cyfrowy numer PESEL
+                    </div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="edit-notatki" className="text-right">
