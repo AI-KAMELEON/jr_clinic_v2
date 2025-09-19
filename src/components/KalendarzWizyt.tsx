@@ -57,6 +57,7 @@ import {
   type Urlop,
   type UrlopInsert,
   type VisitStatus,
+  type WorkSchedule,
 } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
@@ -75,15 +76,7 @@ interface GodzinyPracy {
   do: string;
 }
 
-interface PlanPracy {
-  poniedzialek: { aktywny: boolean; godziny: GodzinyPracy };
-  wtorek: { aktywny: boolean; godziny: GodzinyPracy };
-  sroda: { aktywny: boolean; godziny: GodzinyPracy };
-  czwartek: { aktywny: boolean; godziny: GodzinyPracy };
-  piatek: { aktywny: boolean; godziny: GodzinyPracy };
-  sobota: { aktywny: boolean; godziny: GodzinyPracy };
-  niedziela: { aktywny: boolean; godziny: GodzinyPracy };
-}
+// Use WorkSchedule type from supabase.ts instead of local interface
 
 const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
@@ -108,7 +101,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [currentSearchDate, setCurrentSearchDate] = useState<Date>(new Date());
 
   // Plan pracy
-  const [planPracy, setPlanPracy] = useState<PlanPracy>({
+  const [planPracy, setPlanPracy] = useState<WorkSchedule>({
     poniedzialek: { aktywny: true, godziny: { od: "08:00", do: "17:00" } },
     wtorek: { aktywny: true, godziny: { od: "08:00", do: "17:00" } },
     sroda: { aktywny: true, godziny: { od: "08:00", do: "17:00" } },
@@ -117,7 +110,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     sobota: { aktywny: false, godziny: { od: "08:00", do: "14:00" } },
     niedziela: { aktywny: false, godziny: { od: "08:00", do: "14:00" } },
   });
-  const [tempPlanPracy, setTempPlanPracy] = useState<PlanPracy>(planPracy);
+  const [tempPlanPracy, setTempPlanPracy] = useState<WorkSchedule>(planPracy);
 
   const [wizyty, setWizyty] = useState<WizytaWithPacjent[]>([]);
   const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
@@ -127,14 +120,24 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedPacjent, setSelectedPacjent] = useState<Pacjent | null>(null);
   const [isSelectingPatient, setIsSelectingPatient] = useState(false);
+  const [showPatientError, setShowPatientError] = useState(false);
 
   const [nowaWizyta, setNowaWizyta] = useState<Partial<WizytaInsert>>({
     data: format(new Date(), "yyyy-MM-dd"),
     godzina: "08:00:00",
+    godzina_od: "08:00:00",
+    godzina_do: "08:30:00",
     rodzaj: "Przegląd",
     notatki: "",
     status: "zaplanowana",
   });
+
+  // Visit duration types
+  const [visitDuration, setVisitDuration] = useState<'15min' | '30min' | 'custom'>('30min');
+  const [customDurationMinutes, setCustomDurationMinutes] = useState<number>(60);
+  const [customStartTime, setCustomStartTime] = useState<string>('08:00');
+  const [customEndTime, setCustomEndTime] = useState<string>('09:00');
+  const [timeSlotWarning, setTimeSlotWarning] = useState<string>('');
 
   const [nowyUrlop, setNowyUrlop] = useState<Partial<UrlopInsert>>({
     data_od: format(new Date(), "yyyy-MM-dd"),
@@ -340,10 +343,45 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     }
   };
 
+  // Fetch plan pracy from database
+  const fetchPlanPracy = async () => {
+    try {
+      console.log("Fetching plan pracy...");
+      const { data, error } = await supabase
+        .from("plany_pracy")
+        .select("*")
+        .order("dzien_tygodnia");
+
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+      console.log("Plan pracy fetched:", data);
+      
+      if (data && data.length > 0) {
+        const workSchedule: WorkSchedule = {};
+        data.forEach((item) => {
+          workSchedule[item.dzien_tygodnia] = {
+            aktywny: item.aktywny,
+            godziny: {
+              od: item.godzina_od.substring(0, 5), // Convert HH:MM:SS to HH:MM
+              do: item.godzina_do.substring(0, 5),
+            },
+          };
+        });
+        setPlanPracy(workSchedule);
+        setTempPlanPracy(workSchedule);
+      }
+    } catch (err) {
+      console.error("Error fetching plan pracy:", err);
+      setError(`Błąd podczas pobierania planu pracy: ${err.message || err.toString()}`);
+    }
+  };
+
 
   // Get day name in Polish
-  const getDayName = (date: Date): keyof PlanPracy => {
-    const days: (keyof PlanPracy)[] = [
+  const getDayName = (date: Date): keyof WorkSchedule => {
+    const days: (keyof WorkSchedule)[] = [
       "niedziela",
       "poniedzialek",
       "wtorek",
@@ -353,6 +391,236 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       "sobota",
     ];
     return days[date.getDay()];
+  };
+
+  // Add minutes to time string
+  const addMinutesToTime = (timeStr: string, minutes: number): string => {
+    const [hours, mins] = timeStr.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    const newHours = Math.floor(totalMinutes / 60);
+    const newMins = totalMinutes % 60;
+    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}:00`;
+  };
+
+  // Calculate duration in minutes between two time strings
+  const calculateDuration = (startTime: string, endTime: string): number => {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    return endMinutes - startMinutes;
+  };
+
+  // Update visit times based on duration selection
+  const updateVisitTimes = (startTime: string, duration: '15min' | '30min' | 'custom', customStart?: string, customEnd?: string, customMinutes?: number) => {
+    if (duration === 'custom') {
+      if (customStart && customEnd) {
+        return {
+          godzina: customStart + ':00',
+          godzina_od: customStart + ':00',
+          godzina_do: customEnd + ':00',
+          customStartTime: customStart,
+        };
+      } else if (customMinutes) {
+        return {
+          godzina: startTime,
+          godzina_od: startTime,
+          godzina_do: addMinutesToTime(startTime, customMinutes),
+          customStartTime: startTime.substring(0, 5), // HH:MM format
+        };
+      } else {
+        // Dla custom wizyt bez customStart/customEnd/customMinutes
+        // Użyj przekazanej wartości startTime (wybranej z dropdown)
+        const endTime = addMinutesToTime(startTime, customDurationMinutes || 60);
+        
+        return {
+          godzina: startTime,
+          godzina_od: startTime,
+          godzina_do: endTime,
+          customStartTime: startTime.substring(0, 5), // HH:MM format
+        };
+      }
+    }
+    
+    const minutes = duration === '15min' ? 15 : 30;
+    return {
+      godzina: startTime,
+      godzina_od: startTime,
+      godzina_do: addMinutesToTime(startTime, minutes),
+    };
+  };
+
+  // Generate working hours for a specific date based on work schedule
+  const generateWorkingHours = (date: string, duration: '15min' | '30min' | 'custom' = '30min', customMinutes?: number): string[] => {
+    const dateObj = new Date(date + "T00:00:00");
+    const dayName = getDayName(dateObj);
+    const daySchedule = planPracy[dayName];
+    
+    if (!daySchedule || !daySchedule.aktywny) {
+      return [];
+    }
+
+    // Get existing visits for this date
+    const wizytyNaDzien = wizyty.filter((w) => w.data === date);
+    
+    const hours: string[] = [];
+    const startTime = daySchedule.godziny.od;
+    const endTime = daySchedule.godziny.do;
+    
+    // Parse start and end times
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    // Determine visit duration in minutes
+    let visitDurationMinutes: number;
+    if (duration === 'custom' && customMinutes) {
+      visitDurationMinutes = customMinutes;
+    } else {
+      visitDurationMinutes = duration === '15min' ? 15 : 30;
+    }
+    
+    // Generate base 15-minute slots
+    let currentHour = startHour;
+    let currentMin = startMin;
+    
+    while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+      const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}:00`;
+      
+      // Check if this slot can accommodate the visit duration
+      const visitEndTime = addMinutesToTime(timeStr, visitDurationMinutes);
+      const [visitEndHour, visitEndMin] = visitEndTime.split(':').map(Number);
+      const [workEndHour, workEndMin] = endTime.split(':').map(Number);
+      
+      // Check if visit would fit within working hours
+      const fitsInWorkHours = visitEndHour < workEndHour || (visitEndHour === workEndHour && visitEndMin <= workEndMin);
+      
+      if (fitsInWorkHours) {
+        // Check if this slot conflicts with existing visits
+        const hasConflict = wizytyNaDzien.some((wizyta) => {
+          const existingStart = wizyta.godzina_od || wizyta.godzina;
+          const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+          
+          // Check if new visit overlaps with existing visit
+          return (timeStr < existingEnd && visitEndTime > existingStart);
+        });
+        
+        if (!hasConflict) {
+          hours.push(timeStr);
+        }
+      }
+      
+      // Add 15 minutes
+      currentMin += 15;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour++;
+      }
+    }
+    
+    return hours;
+  };
+
+  // Generate slots in a time range with specified interval
+  const generateSlotsInRange = (startTime: string, endTime: string, intervalMinutes: number): string[] => {
+    const slots = [];
+    let current = startTime;
+    
+    while (current < endTime) {
+      slots.push(current);
+      current = addMinutesToTime(current, intervalMinutes);
+    }
+    
+    return slots;
+  };
+
+  // Generate all time slots (available and occupied) for display
+  const generateAllTimeSlots = (date: string, duration: '15min' | '30min' | 'custom' = '30min', customMinutes?: number): Array<{time: string, available: boolean, reason?: string}> => {
+    const dateObj = new Date(date + "T00:00:00");
+    const dayName = getDayName(dateObj);
+    const daySchedule = planPracy[dayName];
+    
+    if (!daySchedule || !daySchedule.aktywny) {
+      return [];
+    }
+
+    // Get existing visits for this date
+    const wizytyNaDzien = wizyty.filter((w) => w.data === date);
+    
+    const slots: Array<{time: string, available: boolean, reason?: string}> = [];
+    const startTime = daySchedule.godziny.od;
+    const endTime = daySchedule.godziny.do;
+    
+    // Parse start and end times
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    // Determine visit duration in minutes
+    let visitDurationMinutes: number;
+    if (duration === 'custom' && customMinutes) {
+      visitDurationMinutes = customMinutes;
+    } else {
+      visitDurationMinutes = duration === '15min' ? 15 : 30;
+    }
+    
+    // Generate base 15-minute slots
+    let currentHour = startHour;
+    let currentMin = startMin;
+    
+    while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+      const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}:00`;
+      
+      // Check if this slot can accommodate the visit duration
+      const visitEndTime = addMinutesToTime(timeStr, visitDurationMinutes);
+      const [visitEndHour, visitEndMin] = visitEndTime.split(':').map(Number);
+      const [workEndHour, workEndMin] = endTime.split(':').map(Number);
+      
+      // Check if visit would fit within working hours
+      const fitsInWorkHours = visitEndHour < workEndHour || (visitEndHour === workEndHour && visitEndMin <= workEndMin);
+      
+      if (!fitsInWorkHours) {
+        slots.push({
+          time: timeStr,
+          available: false,
+          reason: 'Poza godzinami pracy'
+        });
+      } else {
+        // Check if this slot conflicts with existing visits
+        // For longer visits, check if ALL required slots in the range are free
+        const allSlotsInRange = generateSlotsInRange(timeStr, visitEndTime, 15);
+        const conflictingVisit = wizytyNaDzien.find((wizyta) => {
+          const existingStart = wizyta.godzina_od || wizyta.godzina;
+          const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+          
+          // Check if any slot in the range overlaps with existing visit
+          return allSlotsInRange.some(slot => {
+            const slotEnd = addMinutesToTime(slot, 15);
+            return (slot < existingEnd && slotEnd > existingStart);
+          });
+        });
+        
+        if (conflictingVisit) {
+          slots.push({
+            time: timeStr,
+            available: false,
+            reason: `Zajęte (${conflictingVisit.godzina_od || conflictingVisit.godzina}-${conflictingVisit.godzina_do || addMinutesToTime(conflictingVisit.godzina, 30)})`
+          });
+        } else {
+          slots.push({
+            time: timeStr,
+            available: true
+          });
+        }
+      }
+      
+      // Add 15 minutes
+      currentMin += 15;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour++;
+      }
+    }
+    
+    return slots;
   };
 
   // Check if date is a working day
@@ -420,6 +688,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     data: string,
     godzina: string,
     excludeId?: string,
+    visitDuration?: '15min' | '30min' | 'custom',
+    customStart?: string,
+    customEnd?: string,
+    customMinutes?: number,
   ) => {
     // Check if date is available (working day and not vacation)
     if (!isDateAvailable(data)) {
@@ -440,19 +712,44 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return false;
     }
 
-    // Check if slot is not already taken
-    return !wizyty.some(
-      (wizyta) =>
-        wizyta.data === data &&
-        wizyta.godzina === godzina &&
-        wizyta.id !== excludeId,
-    );
+    // Calculate visit end time based on duration
+    let visitEndTime: string;
+    if (visitDuration === 'custom') {
+      if (customStart && customEnd) {
+        visitEndTime = customEnd + ':00';
+      } else if (customMinutes) {
+        visitEndTime = addMinutesToTime(godzina, customMinutes);
+      } else {
+        visitEndTime = addMinutesToTime(godzina, 60); // Default 60 minutes
+      }
+    } else {
+      const minutes = visitDuration === '15min' ? 15 : 30;
+      visitEndTime = addMinutesToTime(godzina, minutes);
+    }
+
+    // Check for time conflicts with existing visits
+    return !wizyty.some((wizyta) => {
+      if (wizyta.data !== data || wizyta.id === excludeId) {
+        return false;
+      }
+
+      const existingStart = wizyta.godzina_od || wizyta.godzina;
+      const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+
+      // Check if new visit overlaps with existing visit
+      // Use godzina_od if available, otherwise use godzina
+      const newStart = godzina;
+      return (
+        (newStart < existingEnd && visitEndTime > existingStart)
+      );
+    });
   };
 
   useEffect(() => {
     fetchPacjenci();
     fetchWizyty();
     fetchUrlopy();
+    fetchPlanPracy();
   }, []);
 
   const handleAddWizyta = () => {
@@ -460,13 +757,29 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setSelectedPacjent(null);
     setSearchQuery("");
     setSearchResults([]);
+    
+    // Reset custom fields
+    setVisitDuration('30min');
+    setCustomDurationMinutes(60);
+    setCustomStartTime('08:00');
+    setCustomEndTime('09:00');
+    
+    const selectedDateStr = selectedDate
+      ? format(selectedDate, "yyyy-MM-dd")
+      : format(new Date(), "yyyy-MM-dd");
+    
+    // Get first available hour from work schedule
+    const workingHours = generateWorkingHours(selectedDateStr);
+    const firstAvailableHour = workingHours.length > 0 ? workingHours[0] : "08:00:00";
+    
     setNowaWizyta({
-      data: selectedDate
-        ? format(selectedDate, "yyyy-MM-dd")
-        : format(new Date(), "yyyy-MM-dd"),
-      godzina: "08:00:00",
+      data: selectedDateStr,
+      godzina: firstAvailableHour,
+      godzina_od: firstAvailableHour,
+      godzina_do: addMinutesToTime(firstAvailableHour, 30),
       rodzaj: "PRZEGLĄD",
       notatki: "",
+      status: "zaplanowana",
     });
     setError(null);
     setIsDialogOpen(true);
@@ -477,10 +790,28 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setSelectedPacjent(wizyta.pacjenci);
     setSearchQuery(`${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`);
     setSearchResults([]);
+    
+    // Determine visit duration based on existing times
+    const startTime = wizyta.godzina_od || wizyta.godzina;
+    const endTime = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+    const duration = calculateDuration(startTime, endTime);
+    
+    if (duration === 15) {
+      setVisitDuration('15min');
+    } else if (duration === 30) {
+      setVisitDuration('30min');
+    } else {
+      setVisitDuration('custom');
+      setCustomStartTime(startTime.substring(0, 5));
+      setCustomEndTime(endTime.substring(0, 5));
+    }
+    
     setNowaWizyta({
       pacjent_id: wizyta.pacjent_id,
       data: wizyta.data,
       godzina: wizyta.godzina,
+      godzina_od: startTime,
+      godzina_do: endTime,
       rodzaj: wizyta.rodzaj,
       notatki: wizyta.notatki,
       status: wizyta.status || "zaplanowana",
@@ -543,8 +874,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   const handleSaveWizyta = async () => {
+    // Check if patient is selected
+    if (!nowaWizyta.pacjent_id) {
+      setError("❌ Proszę wybrać pacjenta przed dodaniem wizyty");
+      setShowPatientError(true);
+      return;
+    }
+    
+    // Clear patient error if patient is selected
+    setShowPatientError(false);
+
+    // Check other required fields
     if (
-      !nowaWizyta.pacjent_id ||
       !nowaWizyta.data ||
       !nowaWizyta.godzina ||
       !nowaWizyta.rodzaj
@@ -553,13 +894,38 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return;
     }
 
+    // Additional validation: check for overlapping visits using godzina_od and godzina_do
+    const newStart = nowaWizyta.godzina_od || nowaWizyta.godzina;
+    const newEnd = nowaWizyta.godzina_do || addMinutesToTime(nowaWizyta.godzina, 30);
+    
+    const hasOverlap = wizyty.some((wizyta) => {
+      if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+        return false;
+      }
+      
+      const existingStart = wizyta.godzina_od || wizyta.godzina;
+      const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+      
+      // Check if visits overlap
+      return (newStart < existingEnd && newEnd > existingStart);
+    });
+    
+    if (hasOverlap) {
+      setError("❌ Wybrany termin koliduje z istniejącą wizytą");
+      return;
+    }
+
     // Check if time slot is available
     // Check if time slot is available (includes working hours and vacation check)
     if (
       !isTimeSlotAvailable(
         nowaWizyta.data,
-        nowaWizyta.godzina,
+        nowaWizyta.godzina_od || nowaWizyta.godzina,
         selectedWizyta?.id,
+        visitDuration,
+        customStartTime,
+        customEndTime,
+        customDurationMinutes,
       )
     ) {
       // Check if time has passed (for today)
@@ -568,15 +934,36 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const currentTime = format(now, "HH:mm:ss");
       
       if (nowaWizyta.data === todayStr && nowaWizyta.godzina <= currentTime) {
-        setError("Nie można dodać wizyty na przeszłą godzinę. Wybierz przyszły termin.");
+        setError("❌ Nie można dodać wizyty w przeszłości");
       } else if (isVacationDay(nowaWizyta.data)) {
-        setError("Wybrany dzień jest dniem urlopowym. Klinika nie pracuje w tym terminie.");
+        setError("❌ Wybrany dzień jest dniem wolnym (urlop)");
       } else if (!isWorkingDay(nowaWizyta.data)) {
-        setError("Wybrany dzień nie jest dniem roboczym.");
+        setError("❌ Wybrany dzień nie jest dniem roboczym");
       } else if (!isWithinWorkingHours(nowaWizyta.data, nowaWizyta.godzina)) {
-        setError("Wybrana godzina jest poza godzinami pracy kliniki.");
+        const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
+        const daySchedule = planPracy[dayName];
+        if (daySchedule) {
+          setError(`❌ Godzina poza planem pracy (${daySchedule.godziny.od} - ${daySchedule.godziny.do})`);
+        } else {
+          setError("❌ Godzina poza planem pracy");
+        }
+      } else if (visitDuration === 'custom' && customDurationMinutes) {
+        const visitEndTime = addMinutesToTime(nowaWizyta.godzina, customDurationMinutes);
+        const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
+        const daySchedule = planPracy[dayName];
+        if (daySchedule) {
+          const [endHour, endMin] = visitEndTime.split(':').map(Number);
+          const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
+          if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
+            setError(`❌ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+          } else {
+            setError("❌ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami");
+          }
+        } else {
+          setError("❌ Wybrany termin nie jest dostępny");
+        }
       } else {
-        setError("Ten termin jest już zajęty. Wybierz inną godzinę.");
+        setError("❌ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami");
       }
       return;
     }
@@ -593,6 +980,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             pacjent_id: nowaWizyta.pacjent_id,
             data: nowaWizyta.data,
             godzina: nowaWizyta.godzina,
+            godzina_od: nowaWizyta.godzina_od,
+            godzina_do: nowaWizyta.godzina_do,
             rodzaj: nowaWizyta.rodzaj,
             notatki: nowaWizyta.notatki || "",
             status: nowaWizyta.status || "zaplanowana",
@@ -606,6 +995,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           pacjent_id: nowaWizyta.pacjent_id,
           data: nowaWizyta.data,
           godzina: nowaWizyta.godzina,
+          godzina_od: nowaWizyta.godzina_od,
+          godzina_do: nowaWizyta.godzina_do,
           rodzaj: nowaWizyta.rodzaj,
           notatki: nowaWizyta.notatki || "",
           status: nowaWizyta.status || "zaplanowana",
@@ -840,6 +1231,41 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     }
   };
 
+  const handleSaveWorkSchedule = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Zapisz każdy dzień tygodnia do bazy danych
+      const updates = Object.entries(tempPlanPracy).map(([dzien, plan]) => ({
+        dzien_tygodnia: dzien,
+        godzina_od: plan.godziny.od + ':00',
+        godzina_do: plan.godziny.do + ':00',
+        aktywny: plan.aktywny,
+        updated_at: new Date().toISOString()
+      }));
+
+      // Użyj upsert aby zaktualizować istniejące rekordy lub utworzyć nowe
+      const { error } = await supabase
+        .from('plany_pracy')
+        .upsert(updates, { 
+          onConflict: 'dzien_tygodnia',
+          ignoreDuplicates: false 
+        });
+
+      if (error) throw error;
+
+      // Aktualizuj lokalny stan
+      setPlanPracy(tempPlanPracy);
+      setIsWorkScheduleDialogOpen(false);
+      
+    } catch (err: any) {
+      console.error('Error saving work schedule:', err);
+      setError(`Błąd podczas zapisywania planu pracy: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const znajdzNajblizszeTerminy = async (
     startDate: Date = new Date(),
@@ -862,15 +1288,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         // Sprawdź czy to dzień dostępny (roboczy i nie urlop)
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
-          const zajeteGodziny = wizyty
-            .filter((w) => w.data === dataStr)
-            .map((w) => w.godzina);
+          // Pobierz wszystkie wizyty z tego dnia
+          const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr);
 
-          // Filtruj godziny według planu pracy i zajętości
-          let wolneGodziny = godzinyPrzyjec.filter(
-            (g) =>
-              !zajeteGodziny.includes(g) && isWithinWorkingHours(dataStr, g),
-          );
+          // Generuj godziny na podstawie planu pracy (30-minutowe sloty dla najbliższych terminów)
+          const workingHours = generateWorkingHours(dataStr, '30min');
+          
+          // Użyj wygenerowanych godzin (już przefiltrowanych przez generateWorkingHours)
+          let wolneGodziny = workingHours;
 
           // Jeśli to dzisiaj, usuń godziny które już minęły
           if (dataStr === todayStr) {
@@ -955,6 +1380,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 onSelect={setSelectedDate}
                 className="rounded-md border w-full"
                 locale={pl}
+                weekStartsOn={1}
               />
               <div className="mt-4 space-y-2">
                 <Button
@@ -1115,7 +1541,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                     <div className="flex items-center mb-2">
                                       <Clock className="h-4 w-4 mr-2 text-gray-500" />
                                       <span className="font-medium">
-                                        {wizyta.godzina.substring(0, 5)}
+                                        {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
+                                        {wizyta.godzina_do && (
+                                          <span className="text-gray-500 ml-1">
+                                            - {wizyta.godzina_do.substring(0, 5)}
+                                          </span>
+                                        )}
                                       </span>
                                     </div>
                                     <h4 className="text-lg font-semibold hover:text-blue-600 transition-colors">
@@ -1409,16 +1840,19 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="pacjent" className="text-right">
+              <Label htmlFor="pacjent" className="text-left">
                 Pacjent
               </Label>
               <div className="col-span-3 flex gap-2">
                 <Input
                   id="pacjent"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowPatientError(false); // Clear error when typing
+                  }}
                   placeholder="Wpisz imię, nazwisko lub numer telefonu"
-                  className="flex-1"
+                  className={`flex-1 ${showPatientError ? 'border-red-500 bg-red-50' : ''}`}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       searchPacjenci(searchQuery);
@@ -1439,6 +1873,19 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 </Button>
               </div>
             </div>
+
+            {/* Komunikat błędu dla pacjenta */}
+            {showPatientError && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div></div>
+                <div className="col-span-3">
+                  <div className="text-red-500 text-sm flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Proszę wybrać pacjenta przed dodaniem wizyty
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Wskaźnik wybranego pacjenta */}
             {selectedPacjent && (
@@ -1462,6 +1909,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                     onClick={() => {
                       setSelectedPacjent(null);
                       setSearchQuery("");
+                      setShowPatientError(false); // Clear error when patient is deselected
                       setNowaWizyta({ ...nowaWizyta, pacjent_id: undefined });
                     }}
                     className="text-red-600 hover:text-red-800"
@@ -1473,78 +1921,341 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             )}
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="data" className="text-right">
+              <Label htmlFor="data" className="text-left">
                 Data
               </Label>
               <div className="col-span-3 flex">
-                <Input
-                  id="data"
-                  type="date"
-                  value={nowaWizyta.data || ""}
-                  onChange={(e) => {
-                    setNowaWizyta({ ...nowaWizyta, data: e.target.value });
-                  }}
-                  className="w-full"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {nowaWizyta.data ? format(new Date(nowaWizyta.data + "T00:00:00"), "dd.MM.yyyy") : "Wybierz datę"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 border-2 border-blue-300 shadow-xl bg-blue-50" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={nowaWizyta.data ? new Date(nowaWizyta.data + "T00:00:00") : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const newDate = format(date, "yyyy-MM-dd");
+                          // Get first available hour from work schedule for the new date
+                          const workingHours = generateWorkingHours(newDate);
+                          const firstAvailableHour = workingHours.length > 0 ? workingHours[0] : "08:00:00";
+                          
+                          setNowaWizyta({ 
+                            ...nowaWizyta, 
+                            data: newDate,
+                            godzina: firstAvailableHour
+                          });
+                        }
+                      }}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                      className="scale-100 origin-top-left border-2 border-blue-200 shadow-lg"
+                      locale={pl}
+                      weekStartsOn={1}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="godzina" className="text-right">
-                Godzina
+              <Label htmlFor="dlugosc" className="text-left flex items-center gap-2">
+                <span>⏰</span>
+                <span>Długość wizyty</span>
               </Label>
               <Select
-                value={nowaWizyta.godzina}
-                onValueChange={(value) =>
-                  setNowaWizyta({ ...nowaWizyta, godzina: value })
-                }
+                value={visitDuration}
+                onValueChange={(value: '15min' | '30min' | 'custom') => {
+                  setVisitDuration(value);
+                  
+                  // Dla custom wizyt, ustaw customStartTime na aktualną godzinę
+                  if (value === 'custom' && nowaWizyta.godzina) {
+                    setCustomStartTime(nowaWizyta.godzina.substring(0, 5));
+                  }
+                  
+                  // Reset godzina when duration changes to force re-selection
+                  setNowaWizyta({ ...nowaWizyta, godzina: "" });
+                }}
               >
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Wybierz godzinę" />
+                  <SelectValue placeholder="Wybierz długość wizyty" />
                 </SelectTrigger>
                 <SelectContent>
-                  {godzinyPrzyjec.map((godzina) => {
-                    const isAvailable = nowaWizyta.data
-                      ? isTimeSlotAvailable(
-                          nowaWizyta.data,
-                          godzina,
-                          selectedWizyta?.id,
-                        )
-                      : true;
-
-                    const isInWorkingHours = nowaWizyta.data
-                      ? isWithinWorkingHours(nowaWizyta.data, godzina)
-                      : true;
-
-                    const isWorkDay = nowaWizyta.data
-                      ? isWorkingDay(nowaWizyta.data)
-                      : true;
-
-                    let statusText = "";
-                    if (!isWorkDay) {
-                      statusText = "(dzień wolny)";
-                    } else if (!isInWorkingHours) {
-                      statusText = "(poza godzinami pracy)";
-                    } else if (!isAvailable) {
-                      statusText = "(termin niedostępny)";
-                    }
-
-                    return (
-                      <SelectItem
-                        key={godzina}
-                        value={godzina}
-                        disabled={!isAvailable}
-                      >
-                        {godzina.substring(0, 5)} {statusText}
-                      </SelectItem>
-                    );
-                  })}
+                  <SelectItem value="15min">15 minut</SelectItem>
+                  <SelectItem value="30min">30 minut</SelectItem>
+                  <SelectItem value="custom">Custom (od - do)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="rodzaj" className="text-right">
+              <Label htmlFor="godzina" className="text-left flex items-center gap-2">
+                <span>🕒</span>
+                <span>Godzina</span>
+              </Label>
+              <Select
+                value={nowaWizyta.godzina}
+                onValueChange={(value) => {
+                  // Dla custom wizyt, nie przekazuj customStartTime żeby funkcja użyła wybranej godziny
+                  const times = updateVisitTimes(value, visitDuration, visitDuration === 'custom' ? undefined : customStartTime, customEndTime, customDurationMinutes);
+                  
+                  // Dla custom wizyt, zsynchronizuj customStartTime i customEndTime z wybraną godziną
+                  if (visitDuration === 'custom' && times.customStartTime) {
+                    setCustomStartTime(times.customStartTime);
+                    // Aktualizuj customEndTime na podstawie godzina_do
+                    if (times.godzina_do) {
+                      setCustomEndTime(times.godzina_do.substring(0, 5));
+                    }
+                  }
+                  
+                  setNowaWizyta({ ...nowaWizyta, ...times });
+                  
+                  // Check for conflicts and show warnings
+                  if (nowaWizyta.data) {
+                    const isAvailable = isTimeSlotAvailable(
+                      nowaWizyta.data,
+                      value,
+                      selectedWizyta?.id,
+                      visitDuration,
+                      customStartTime,
+                      customEndTime,
+                      customDurationMinutes,
+                    );
+                    
+                    if (!isAvailable) {
+                      // Find conflicting visits
+                      const conflictingVisits = wizyty.filter(wizyta => {
+                        if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+                          return false;
+                        }
+                        
+                        const existingStart = wizyta.godzina_od || wizyta.godzina;
+                        const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+                        const newEnd = times.godzina_do;
+                        
+                        return (value < existingEnd && newEnd > existingStart);
+                      });
+                      
+                      if (conflictingVisits.length > 0) {
+                        const conflict = conflictingVisits[0];
+                        const conflictStart = conflict.godzina_od || conflict.godzina;
+                        const conflictEnd = conflict.godzina_do || addMinutesToTime(conflict.godzina, 30);
+                        setTimeSlotWarning(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjent?.imie} ${conflict.pacjent?.nazwisko})`);
+                      } else {
+                        setTimeSlotWarning('⚠️ Ten termin nie jest dostępny');
+                      }
+                    } else {
+                      setTimeSlotWarning('');
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Wybierz godzinę" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nowaWizyta.data ? (() => {
+                    const allSlots = generateAllTimeSlots(
+                      nowaWizyta.data, 
+                      visitDuration, 
+                      visitDuration === 'custom' ? customDurationMinutes : undefined
+                    );
+                    console.log('Generated slots for', nowaWizyta.data, 'duration', visitDuration, 'customMinutes', customDurationMinutes, ':', allSlots);
+                    
+                    // Fallback to default hours if no slots generated
+                    if (allSlots.length === 0) {
+                      return godzinyPrzyjec.map((godzina) => (
+                        <SelectItem key={godzina} value={godzina}>
+                          {godzina.substring(0, 5)}
+                        </SelectItem>
+                      ));
+                    }
+                    
+                    return allSlots.map((slot) => {
+                      const todayStr = format(new Date(), "yyyy-MM-dd");
+                      const currentTime = format(new Date(), "HH:mm:ss");
+                      const isPast = nowaWizyta.data === todayStr && slot.time <= currentTime;
+                      const isVacation = isVacationDay(nowaWizyta.data);
+                      const isWorking = isWorkingDay(nowaWizyta.data);
+                      
+                      let statusText = '';
+                      let statusColor = '';
+                      let statusIcon = '';
+                      
+                      if (isPast) {
+                        statusText = ' (przeszła)';
+                        statusColor = 'text-gray-400';
+                        statusIcon = '❌';
+                      } else if (isVacation) {
+                        statusText = ' (urlop)';
+                        statusColor = 'text-orange-500';
+                        statusIcon = '🚫';
+                      } else if (!isWorking) {
+                        statusText = ' (nie pracujemy)';
+                        statusColor = 'text-gray-500';
+                        statusIcon = '🚫';
+                      } else if (!slot.available) {
+                        statusText = ` (${slot.reason})`;
+                        statusColor = 'text-red-500';
+                        statusIcon = '❌';
+                      } else {
+                        statusText = ' (dostępne)';
+                        statusColor = 'text-green-600';
+                        statusIcon = '✅';
+                      }
+                      
+                      return (
+                        <SelectItem
+                          key={slot.time}
+                          value={slot.time}
+                          disabled={!slot.available || isPast || isVacation || !isWorking}
+                          className={statusColor}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{statusIcon}</span>
+                            <span>{slot.time.substring(0, 5)}</span>
+                            <span className="text-sm">{statusText}</span>
+                          </span>
+                        </SelectItem>
+                      );
+                    });
+                  })() : godzinyPrzyjec.map((godzina) => (
+                    <SelectItem key={godzina} value={godzina}>
+                      {godzina.substring(0, 5)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {timeSlotWarning && (
+              <div className="col-span-4">
+                <div className={`border rounded-md p-3 ${
+                  timeSlotWarning.includes('nie mieści się') 
+                    ? 'bg-orange-50 border-orange-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <p className={`text-sm ${
+                    timeSlotWarning.includes('nie mieści się') 
+                      ? 'text-orange-700' 
+                      : 'text-red-700'
+                  }`}>
+                    {timeSlotWarning}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {visitDuration === 'custom' && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="customDuration" className="text-left flex items-center gap-2">
+                    <span>⏱️</span>
+                    <span>Długość wizyty</span>
+                  </Label>
+                  <Input
+                    id="customDuration"
+                    type="number"
+                    min="15"
+                    max="480"
+                    step="15"
+                    value={customDurationMinutes}
+                    onChange={(e) => {
+                      const minutes = parseInt(e.target.value) || 60;
+                      setCustomDurationMinutes(minutes);
+                      if (nowaWizyta.godzina_od) {
+                        const times = updateVisitTimes(nowaWizyta.godzina_od, 'custom', undefined, undefined, minutes);
+                        setNowaWizyta({ ...nowaWizyta, ...times });
+                        
+                        // Update custom end time display
+                        const newEndTime = addMinutesToTime(nowaWizyta.godzina_od, minutes);
+                        setCustomEndTime(newEndTime.substring(0, 5));
+                        
+                        // Check if visit fits within working hours
+                        if (nowaWizyta.data) {
+                          const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
+                          const daySchedule = planPracy[dayName];
+                          if (daySchedule) {
+                            const [endHour, endMin] = newEndTime.split(':').map(Number);
+                            const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
+                            if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
+                              setTimeSlotWarning(`⚠️ Wizyta ${minutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                            } else {
+                              setTimeSlotWarning('');
+                            }
+                          }
+                        }
+                      }
+                    }}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="customStart" className="text-left flex items-center gap-2">
+                    <span>🕐</span>
+                    <span>Od</span>
+                  </Label>
+                  <Input
+                    id="customStart"
+                    type="time"
+                    value={customStartTime}
+                    onChange={(e) => {
+                      setCustomStartTime(e.target.value);
+                      const times = updateVisitTimes(e.target.value + ':00', 'custom', undefined, undefined, customDurationMinutes);
+                      
+                      // Zsynchronizuj z główną godziną
+                      setNowaWizyta({ 
+                        ...nowaWizyta, 
+                        ...times,
+                        godzina: e.target.value + ':00'
+                      });
+                      
+                      // Update custom end time display
+                      const newEndTime = addMinutesToTime(e.target.value + ':00', customDurationMinutes);
+                      setCustomEndTime(newEndTime.substring(0, 5));
+                      
+                      // Check if visit fits within working hours
+                      if (nowaWizyta.data) {
+                        const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
+                        const daySchedule = planPracy[dayName];
+                        if (daySchedule) {
+                          const [endHour, endMin] = newEndTime.split(':').map(Number);
+                          const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
+                          if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
+                            setTimeSlotWarning(`⚠️ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                          } else {
+                            setTimeSlotWarning('');
+                          }
+                        }
+                      }
+                    }}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="customEnd" className="text-left flex items-center gap-2">
+                    <span>🕕</span>
+                    <span>Do</span>
+                  </Label>
+                  <Input
+                    id="customEnd"
+                    type="time"
+                    value={customEndTime}
+                    disabled
+                    className="col-span-3 bg-gray-100"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="rodzaj" className="text-left">
                 Rodzaj wizyty
               </Label>
               <Select
@@ -1567,7 +2278,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="notatki" className="text-right">
+              <Label htmlFor="notatki" className="text-left">
                 Notatki
               </Label>
               <Textarea
@@ -1659,6 +2370,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       setSelectedPacjent(pacjent);
                       setSearchQuery(`${pacjent.imie} ${pacjent.nazwisko}`);
                       setIsSearchOpen(false);
+                      setShowPatientError(false); // Clear error when patient is selected
                       setNowaWizyta({
                         ...nowaWizyta,
                         pacjent_id: pacjent.id,
@@ -1732,8 +2444,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             <DialogTitle>Plan pracy kliniki</DialogTitle>
           </DialogHeader>
           <div className="py-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
             <div className="space-y-6">
-              {Object.entries(tempPlanPracy).map(([dzien, config]) => {
+              {Object.entries(tempPlanPracy)
+                .sort(([a], [b]) => {
+                  const order = ['poniedzialek', 'wtorek', 'sroda', 'czwartek', 'piatek', 'sobota', 'niedziela'];
+                  return order.indexOf(a) - order.indexOf(b);
+                })
+                .map(([dzien, config]) => {
                 const dniTygodnia = {
                   poniedzialek: "Poniedziałek",
                   wtorek: "Wtorek",
@@ -1828,12 +2550,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
               Anuluj
             </Button>
             <Button
-              onClick={() => {
-                setPlanPracy(tempPlanPracy);
-                setIsWorkScheduleDialogOpen(false);
-              }}
+              onClick={handleSaveWorkSchedule}
+              disabled={loading}
             >
-              Zapisz plan pracy
+              {loading ? "Zapisywanie..." : "Zapisz plan pracy"}
             </Button>
           </DialogFooter>
         </DialogContent>

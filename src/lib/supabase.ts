@@ -24,6 +24,20 @@ export type WizytaUpdate = Updates<"wizyty">;
 export type Urlop = Tables<"urlopy">;
 export type UrlopInsert = Inserts<"urlopy">;
 export type UrlopUpdate = Updates<"urlopy">;
+export type PlanPracy = Tables<"plany_pracy">;
+export type PlanPracyInsert = Inserts<"plany_pracy">;
+export type PlanPracyUpdate = Updates<"plany_pracy">;
 
 // Visit status types
 export type VisitStatus = 'zaplanowana' | 'wykonana' | 'odwolana';
+
+// Work schedule types
+export type WorkSchedule = {
+  [key: string]: {
+    aktywny: boolean;
+    godziny: {
+      od: string;
+      do: string;
+    };
+  };
+};

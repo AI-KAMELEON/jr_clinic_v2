@@ -55,28 +55,37 @@ export type Database = {
           created_at: string | null
           data: string
           godzina: string
+          godzina_od: string
+          godzina_do: string
           id: string
           notatki: string | null
           pacjent_id: string | null
           rodzaj: string
+          status?: string
         }
         Insert: {
           created_at?: string | null
           data: string
           godzina: string
+          godzina_od: string
+          godzina_do: string
           id?: string
           notatki?: string | null
           pacjent_id?: string | null
           rodzaj: string
+          status?: string
         }
         Update: {
           created_at?: string | null
           data?: string
           godzina?: string
+          godzina_od?: string
+          godzina_do?: string
           id?: string
           notatki?: string | null
           pacjent_id?: string | null
           rodzaj?: string
+          status?: string
         }
         Relationships: [
           {

@@ -364,7 +364,6 @@ const PacjenciPanel = ({
                           name="email"
                           type="email"
                           className="col-span-3"
-                          placeholder="adres@email.com"
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
@@ -375,7 +374,6 @@ const PacjenciPanel = ({
                           id="adres"
                           name="adres"
                           className="col-span-3"
-                          placeholder="ul. Przykładowa 123, 00-000 Miasto"
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
@@ -412,7 +410,6 @@ const PacjenciPanel = ({
                             id="pesel"
                             name="pesel"
                             type="text"
-                            placeholder="12345678901"
                             maxLength={11}
                             className="font-mono"
                             onChange={(e) => {
@@ -451,7 +448,6 @@ const PacjenciPanel = ({
                           id="notatki"
                           name="notatki"
                           className="col-span-3"
-                          placeholder="Opcjonalne notatki o pacjencie"
                         />
                       </div>
                     </div>
@@ -600,7 +596,6 @@ const PacjenciPanel = ({
                     type="email"
                     className="col-span-3"
                     defaultValue={currentPacjent.email || ""}
-                    placeholder="adres@email.com"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -612,7 +607,6 @@ const PacjenciPanel = ({
                     name="adres"
                     className="col-span-3"
                     defaultValue={currentPacjent.adres || ""}
-                    placeholder="ul. Przykładowa 123, 00-000 Miasto"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -650,7 +644,6 @@ const PacjenciPanel = ({
                       id="edit-pesel"
                       name="pesel"
                       type="text"
-                      placeholder="12345678901"
                       maxLength={11}
                       className="font-mono"
                       defaultValue={currentPacjent?.pesel || ""}
@@ -692,7 +685,6 @@ const PacjenciPanel = ({
                     name="notatki"
                     className="col-span-3"
                     defaultValue={currentPacjent.notatki || ""}
-                    placeholder="Opcjonalne notatki o pacjencie"
                   />
                 </div>
               </div>
