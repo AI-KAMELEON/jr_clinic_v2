@@ -20,31 +20,5 @@ export default defineConfig({
   server: {
     // @ts-ignore
     allowedHosts: true,
-    fs: {
-      // Ogranicz dostęp do plików poza projektem dla bezpieczeństwa
-      deny: [
-        // Zablokuj dostęp do plików systemowych
-        '**/.git/**',
-        '**/.env*',
-        '**/node_modules/**',
-        '**/.DS_Store',
-        '**/Thumbs.db',
-        // Zablokuj dostęp do katalogów nadrzędnych
-        '../**',
-        '../../**',
-        '../../../**'
-      ],
-      // Pozwól na dostęp tylko do katalogu projektu
-      allow: [
-        // Katalog główny projektu
-        process.cwd(),
-        // Katalog src
-        path.resolve(__dirname, './src'),
-        // Katalog public
-        path.resolve(__dirname, './public'),
-        // Node modules (tylko dla development)
-        ...(process.env.NODE_ENV === 'development' ? [path.resolve(__dirname, './node_modules')] : [])
-      ]
-    }
   }
 });
