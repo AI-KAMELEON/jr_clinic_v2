@@ -212,10 +212,15 @@ const Home = () => {
       setDashboardData(prev => ({ ...prev, loading: true, error: null }));
 
       const today = new Date().toISOString().split('T')[0];
+      
+      // Tydzień kalendarzowy (poniedziałek - niedziela)
       const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      const endOfWeek = new Date();
-      endOfWeek.setDate(endOfWeek.getDate() + (6 - endOfWeek.getDay()));
+      const dayOfWeek = startOfWeek.getDay(); // 0 = niedziela, 1 = poniedziałek, etc.
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Liczba dni do poniedziałku
+      startOfWeek.setDate(startOfWeek.getDate() + daysToMonday);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // Niedziela
       
       const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
       const endOfWeekStr = endOfWeek.toISOString().split('T')[0];

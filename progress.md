@@ -27,6 +27,8 @@
 - [2024-12-20] Zaktualizowano Supabase CLI do wersji 2.40.7 i pomyślnie wdrożono funkcje Edge Functions
 - [2024-12-20] Projekt został wypchnięty do GitHub: https://github.com/AI-KAMELEON/jr_clinic_v2.git
 - [2024-12-20] Naprawiono wszystkie luki bezpieczeństwa - zaktualizowano pakiety npm i przywrócono stabilną konfigurację
+- [2024-12-20] Dodano zegar cyfrowy z datą do navbara - real-time aktualizacja, polska lokalizacja
+- [2024-12-20] Wdrożono funkcje Edge Functions: cron-test i daily-reminder - wszystkie aktywne i gotowe
 
 # Podsumowanie przed zakończeniem pracy
 
