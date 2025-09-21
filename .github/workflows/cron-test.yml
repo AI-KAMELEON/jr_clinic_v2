@@ -1,0 +1,16 @@
+name: CRON test every 2 minutes
+
+on:
+  schedule:
+    - cron: "*/2 * * * *"   # co 2 minuty
+  workflow_dispatch:        # umożliwia ręczne wywołanie z GitHuba
+
+jobs:
+  call-function:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Supabase daily-reminder function
+        run: |
+          curl -X POST "https://wxzhzanagvxsiazrekia.supabase.co/functions/v1/daily-reminder" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json"
