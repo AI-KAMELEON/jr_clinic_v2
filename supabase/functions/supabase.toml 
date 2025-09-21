@@ -1,0 +1,10 @@
+project_id=wxzhzanagvxsiazrekia
+
+
+[functions.daily-reminder]
+# Funkcja uruchamiana CRON-em codziennie, wywołuje send-admin-sms z typem PRZYPOMNIENIE
+verify_jwt = false
+
+  [[functions.daily-reminder.cron]]
+  # CRON = codziennie o 17:00 czasu PL → w UTC = 15:00
+  schedule = "*/2 * * * *"

@@ -22,6 +22,8 @@
 - [2024-12-19] Dodano funkcjonalność wyświetlania zajętych slotów w dropdown godzin z kolorowym kodowaniem
 - [2024-12-19] Zaimplementowano kalendarz z polską lokalizacją i rozpoczęciem od poniedziałku
 - [2024-12-19] Naprawiono problemy z nakładającymi się wizytami i walidacją terminów
+- [2024-12-19] Przeprowadzono szczegółową analizę architektury i funkcjonalności systemu KARTOTEKA
+- [2024-12-20] Pomyślnie uruchomiono aplikację deweloperską na porcie 5173
 
 # Podsumowanie przed zakończeniem pracy
 

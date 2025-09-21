@@ -13,9 +13,10 @@ import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
 import { AdminManagement } from "./AdminManagement";
+import MessagesPage from "./MessagesPage";
 import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Settings } from "lucide-react";
+import { AlertCircle, Settings, MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Home = () => {
@@ -381,6 +382,14 @@ const Home = () => {
               <Clock className="mr-2 h-4 w-4" />
               Kalendarz wizyt
             </Button>
+            <Button
+              variant={activeTab === "wiadomosci" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("wiadomosci")}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Wiadomości
+            </Button>
             {selectedPatientId && (
               <Button
                 variant={activeTab === "karta-pacjenta" ? "default" : "ghost"}
@@ -597,6 +606,9 @@ const Home = () => {
               />
             </TabsContent>
 
+            <TabsContent value="wiadomosci">
+              <MessagesPage />
+            </TabsContent>
 
             <TabsContent value="karta-pacjenta">
               {selectedPatientId && <KartaPacjenta pacjentId={selectedPatientId} />}
