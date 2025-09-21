@@ -2,7 +2,7 @@ name: CRON test every 2 minutes
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # co 2 minuty
+    - cron: "*/5 * * * *"   # co 5 minut
   workflow_dispatch:        # umożliwia ręczne wywołanie z GitHuba
 
 jobs:
