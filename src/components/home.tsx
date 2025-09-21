@@ -14,6 +14,7 @@ import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
 import { AdminManagement } from "./AdminManagement";
 import MessagesPage from "./MessagesPage";
+import DigitalClock from "./DigitalClock";
 import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Settings, MessageSquare } from "lucide-react";
@@ -336,6 +337,10 @@ const Home = () => {
             </div>
             <h1 className="text-xl font-bold">Klinika Stomatologiczna</h1>
           </div>
+          
+          {/* Zegar z datą pośrodku */}
+          <DigitalClock />
+          
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">
               {user?.email}
