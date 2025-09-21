@@ -1,4 +1,4 @@
-name: CRON test every 2 minutes
+name: CRON test every 5 minutes
 
 on:
   schedule:
