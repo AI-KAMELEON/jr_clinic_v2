@@ -1,8 +1,8 @@
-name: CRON test every 5 minutes
+name: CRON sending
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # co 5 minut
+    - cron: "0 6 * * *"   # o 08:00
   workflow_dispatch:        # umożliwia ręczne wywołanie z GitHuba
 
 jobs:
