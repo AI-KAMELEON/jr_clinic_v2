@@ -24,6 +24,8 @@
 - [2024-12-19] Naprawiono problemy z nakładającymi się wizytami i walidacją terminów
 - [2024-12-19] Przeprowadzono szczegółową analizę architektury i funkcjonalności systemu KARTOTEKA
 - [2024-12-20] Pomyślnie uruchomiono aplikację deweloperską na porcie 5173
+- [2024-12-20] Zaktualizowano Supabase CLI do wersji 2.40.7 i pomyślnie wdrożono funkcje Edge Functions
+- [2024-12-20] Projekt został wypchnięty do GitHub: https://github.com/AI-KAMELEON/jr_clinic_v2.git
 
 # Podsumowanie przed zakończeniem pracy
 
