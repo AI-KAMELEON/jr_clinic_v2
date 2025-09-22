@@ -17,7 +17,7 @@ serve(async () => {
 
     const payload = {
       date: tomorrowStr,
-      type: "reminder", // tu ważne: musi być zgodne z tym, co obsługuje send-admin-sms
+      type: "PRZYPOMNIENIE", // Poprawiony typ, zgodny z send-admin-sms
     };
 
     console.log("➡️ Wywołuję send-admin-sms", url, "z body:", payload);

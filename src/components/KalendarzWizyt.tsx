@@ -127,7 +127,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     godzina: "08:00:00",
     godzina_od: "08:00:00",
     godzina_do: "08:30:00",
-    rodzaj: "Przegląd",
+    rodzaj: "LECZENIE",
     notatki: "",
     status: "zaplanowana",
   });
@@ -460,8 +460,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return [];
     }
 
-    // Get existing visits for this date
-    const wizytyNaDzien = wizyty.filter((w) => w.data === date);
+    // Get existing visits for this date (exclude cancelled visits)
+    const wizytyNaDzien = wizyty.filter((w) => w.data === date && w.status !== 'odwolana');
     
     const hours: string[] = [];
     const startTime = daySchedule.godziny.od;
@@ -543,8 +543,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return [];
     }
 
-    // Get existing visits for this date
-    const wizytyNaDzien = wizyty.filter((w) => w.data === date);
+    // Get existing visits for this date (exclude cancelled visits)
+    const wizytyNaDzien = wizyty.filter((w) => w.data === date && w.status !== 'odwolana');
     
     const slots: Array<{time: string, available: boolean, reason?: string}> = [];
     const startTime = daySchedule.godziny.od;
@@ -727,8 +727,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       visitEndTime = addMinutesToTime(godzina, minutes);
     }
 
-    // Check for time conflicts with existing visits
-    return !wizyty.some((wizyta) => {
+    // Check for time conflicts with existing visits (exclude cancelled visits)
+    const activeVisits = wizyty.filter(w => w.status !== 'odwolana');
+    const hasConflict = activeVisits.some((wizyta) => {
       if (wizyta.data !== data || wizyta.id === excludeId) {
         return false;
       }
@@ -739,10 +740,32 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       // Check if new visit overlaps with existing visit
       // Use godzina_od if available, otherwise use godzina
       const newStart = godzina;
-      return (
-        (newStart < existingEnd && visitEndTime > existingStart)
-      );
+      const overlaps = (newStart < existingEnd && visitEndTime > existingStart);
+      
+      if (overlaps) {
+        console.log('🔍 DEBUG - Konflikt znaleziony:', {
+          newStart,
+          newEnd: visitEndTime,
+          existingStart,
+          existingEnd,
+          wizytaId: wizyta.id,
+          wizytaStatus: wizyta.status
+        });
+      }
+      
+      return overlaps;
     });
+    
+    console.log('🔍 DEBUG - isTimeSlotAvailable:', {
+      data,
+      godzina,
+      visitEndTime,
+      activeVisitsCount: activeVisits.length,
+      hasConflict,
+      result: !hasConflict
+    });
+    
+    return !hasConflict;
   };
 
   useEffect(() => {
@@ -777,7 +800,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       godzina: firstAvailableHour,
       godzina_od: firstAvailableHour,
       godzina_do: addMinutesToTime(firstAvailableHour, 30),
-      rodzaj: "PRZEGLĄD",
+      rodzaj: "LECZENIE",
       notatki: "",
       status: "zaplanowana",
     });
@@ -874,8 +897,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   const handleSaveWizyta = async () => {
+    console.log('🔍 DEBUG - handleSaveWizyta START:', {
+      nowaWizyta,
+      selectedWizyta: selectedWizyta?.id,
+      visitDuration,
+      customStartTime,
+      customEndTime,
+      customDurationMinutes
+    });
+    
     // Check if patient is selected
     if (!nowaWizyta.pacjent_id) {
+      console.log('❌ DEBUG - Brak pacjenta');
       setError("❌ Proszę wybrać pacjenta przed dodaniem wizyty");
       setShowPatientError(true);
       return;
@@ -890,6 +923,11 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       !nowaWizyta.godzina ||
       !nowaWizyta.rodzaj
     ) {
+      console.log('❌ DEBUG - Brakuje wymaganych pól:', {
+        data: nowaWizyta.data,
+        godzina: nowaWizyta.godzina,
+        rodzaj: nowaWizyta.rodzaj
+      });
       setError("Wszystkie pola są wymagane");
       return;
     }
@@ -898,7 +936,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     const newStart = nowaWizyta.godzina_od || nowaWizyta.godzina;
     const newEnd = nowaWizyta.godzina_do || addMinutesToTime(nowaWizyta.godzina, 30);
     
-    const hasOverlap = wizyty.some((wizyta) => {
+    const hasOverlap = wizyty.filter(w => w.status !== 'odwolana').some((wizyta) => {
       if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
         return false;
       }
@@ -911,35 +949,50 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     });
     
     if (hasOverlap) {
+      console.log('❌ DEBUG - Konflikt terminów (hasOverlap)');
       setError("❌ Wybrany termin koliduje z istniejącą wizytą");
       return;
     }
 
     // Check if time slot is available
     // Check if time slot is available (includes working hours and vacation check)
-    if (
-      !isTimeSlotAvailable(
-        nowaWizyta.data,
-        nowaWizyta.godzina_od || nowaWizyta.godzina,
-        selectedWizyta?.id,
-        visitDuration,
-        customStartTime,
-        customEndTime,
-        customDurationMinutes,
-      )
-    ) {
+    const isSlotAvailable = isTimeSlotAvailable(
+      nowaWizyta.data,
+      nowaWizyta.godzina_od || nowaWizyta.godzina,
+      selectedWizyta?.id,
+      visitDuration,
+      customStartTime,
+      customEndTime,
+      customDurationMinutes,
+    );
+    
+    console.log('🔍 DEBUG - Sprawdzanie dostępności terminu:', {
+      data: nowaWizyta.data,
+      godzina: nowaWizyta.godzina_od || nowaWizyta.godzina,
+      visitDuration,
+      isSlotAvailable,
+      hasOverlap,
+      wizytyNaDzien: wizyty.filter(w => w.data === nowaWizyta.data && w.status !== 'odwolana').length
+    });
+    
+    if (!isSlotAvailable) {
+      console.log('❌ DEBUG - Termin niedostępny (isSlotAvailable = false)');
       // Check if time has passed (for today)
       const now = new Date();
       const todayStr = format(now, "yyyy-MM-dd");
       const currentTime = format(now, "HH:mm:ss");
       
       if (nowaWizyta.data === todayStr && nowaWizyta.godzina <= currentTime) {
+        console.log('❌ DEBUG - Wizyta w przeszłości');
         setError("❌ Nie można dodać wizyty w przeszłości");
       } else if (isVacationDay(nowaWizyta.data)) {
+        console.log('❌ DEBUG - Dzień urlopowy');
         setError("❌ Wybrany dzień jest dniem wolnym (urlop)");
       } else if (!isWorkingDay(nowaWizyta.data)) {
+        console.log('❌ DEBUG - Nie dzień roboczy');
         setError("❌ Wybrany dzień nie jest dniem roboczym");
       } else if (!isWithinWorkingHours(nowaWizyta.data, nowaWizyta.godzina)) {
+        console.log('❌ DEBUG - Poza godzinami pracy');
         const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
         const daySchedule = planPracy[dayName];
         if (daySchedule) {
@@ -948,6 +1001,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           setError("❌ Godzina poza planem pracy");
         }
       } else if (visitDuration === 'custom' && customDurationMinutes) {
+        console.log('❌ DEBUG - Custom wizyta nie mieści się w planie pracy');
         const visitEndTime = addMinutesToTime(nowaWizyta.godzina, customDurationMinutes);
         const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
         const daySchedule = planPracy[dayName];
@@ -963,11 +1017,13 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           setError("❌ Wybrany termin nie jest dostępny");
         }
       } else {
+        console.log('❌ DEBUG - Ogólny błąd dostępności terminu');
         setError("❌ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami");
       }
       return;
     }
 
+    console.log('✅ DEBUG - Przechodzę do zapisu wizyty');
     setLoading(true);
     setError(null);
 
@@ -1005,6 +1061,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         if (error) throw error;
       }
 
+      console.log('✅ DEBUG - Wizyta zapisana pomyślnie');
       await fetchWizyty();
       setIsDialogOpen(false);
       // Wyczyść formularz po zapisaniu
@@ -1013,7 +1070,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           ? format(selectedDate, "yyyy-MM-dd")
           : format(new Date(), "yyyy-MM-dd"),
         godzina: "08:00:00",
-        rodzaj: "PRZEGLĄD",
+        rodzaj: "LECZENIE",
         notatki: "",
       });
       setSelectedWizyta(null);
@@ -1021,13 +1078,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       setSearchQuery("");
       setSearchResults([]);
     } catch (err: any) {
-      console.error("Error saving wizyta:", err);
+      console.error("❌ DEBUG - Error saving wizyta:", err);
       if (err.code === "23505") {
         setError("Ten termin jest już zajęty. Wybierz inną godzinę.");
       } else {
         setError("Błąd podczas zapisywania wizyty");
       }
     } finally {
+      console.log('🔚 DEBUG - handleSaveWizyta END');
       setLoading(false);
     }
   };
@@ -1288,8 +1346,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         // Sprawdź czy to dzień dostępny (roboczy i nie urlop)
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
-          // Pobierz wszystkie wizyty z tego dnia
-          const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr);
+          // Pobierz wszystkie wizyty z tego dnia (exclude cancelled visits)
+          const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
 
           // Generuj godziny na podstawie planu pracy (30-minutowe sloty dla najbliższych terminów)
           const workingHours = generateWorkingHours(dataStr, '30min');
@@ -2029,8 +2087,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                     );
                     
                     if (!isAvailable) {
-                      // Find conflicting visits
-                      const conflictingVisits = wizyty.filter(wizyta => {
+                      // Find conflicting visits (exclude cancelled visits)
+                      const conflictingVisits = wizyty.filter(wizyta => wizyta.status !== 'odwolana').filter(wizyta => {
                         if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
                           return false;
                         }

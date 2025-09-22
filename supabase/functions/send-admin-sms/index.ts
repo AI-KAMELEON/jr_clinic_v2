@@ -101,8 +101,13 @@ serve(async (req)=>{
     if (!clientId || !clientSecret || !from) {
       throw new Error("Brak wymaganych secrets: CLIENT_ID, CLIENT_SECRET, SMS_FROM_NUMBER");
     }
-    // Pobierz wizyty + pacjentów
-    const { data: visits, error } = await supabase.from("wizyty").select("id, data, godzina, pacjenci(id, telefon)").eq("data", date);
+    // Pobierz wizyty + pacjentów, filtrując tylko te o statusie 'zaplanowana'
+    const { data: visits, error } = await supabase
+      .from("wizyty")
+      .select("id, data, godzina, pacjenci(id, telefon)")
+      .eq("data", date)
+      .eq("status", "zaplanowana"); // <-- KLUCZOWA ZMIANA
+
     if (error) throw error;
     if (!visits || visits.length === 0) {
       return new Response(JSON.stringify({
