@@ -2,7 +2,7 @@ name: CRON sending
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # o 08:00
+    - cron: "0 15 * * *"   # wysyłka o 17:00 czasu polskiego
   workflow_dispatch:        # umożliwia ręczne wywołanie z GitHuba
 
 jobs:
