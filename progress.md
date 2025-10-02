@@ -47,6 +47,7 @@
 - [2025-10-02] Dodano notatki wizyt do funkcji drukowania - każda wizyta może wyświetlać swoje własne notatki w wydruku
 - [2025-10-02] Wydruki zawierają teraz zarówno notatki dzienne jak i notatki przypisane do poszczególnych wizyt
 - [2025-10-02] Naprawiono błędy TypeScript w Edge Function send-admin-sms - dodano typy dla wszystkich funkcji i parametrów
+- [2025-10-02] Wypchnięto wszystkie zmiany do GitHub - commit z pełną implementacją notatek dziennych i drukowania
 - [2025-10-02] Połączono dwie migracje SQL w jeden plik complete_schema.sql dla łatwiejszego zarządzania bazą danych
 
 # Podsumowanie przed zakończeniem pracy
