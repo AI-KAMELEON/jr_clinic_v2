@@ -249,6 +249,19 @@ CREATE OR REPLACE VIEW "public"."wizyty_pacjenci_view" AS
 ALTER VIEW "public"."wizyty_pacjenci_view" OWNER TO "postgres";
 
 
+-- Create daily notes table
+CREATE TABLE IF NOT EXISTS "public"."notatki_dzienne" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "data" "date" NOT NULL,
+    "tresc" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."notatki_dzienne" OWNER TO "postgres";
+
+
 ALTER TABLE ONLY "public"."cron_logs" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."cron_logs_id_seq"'::"regclass");
 
 
@@ -298,6 +311,18 @@ ALTER TABLE ONLY "public"."wizyty"
 
 
 
+-- Add primary key for notatki_dzienne
+ALTER TABLE ONLY "public"."notatki_dzienne"
+    ADD CONSTRAINT "notatki_dzienne_pkey" PRIMARY KEY ("id");
+
+
+
+-- Add unique constraint on date (one note per day)
+ALTER TABLE ONLY "public"."notatki_dzienne"
+    ADD CONSTRAINT "notatki_dzienne_data_key" UNIQUE ("data");
+
+
+
 CREATE UNIQUE INDEX "idx_pacjenci_pesel_unique" ON "public"."pacjenci" USING "btree" ("pesel") WHERE ("pesel" IS NOT NULL);
 
 
@@ -318,7 +343,18 @@ CREATE INDEX "idx_wizyty_time_range" ON "public"."wizyty" USING "btree" ("data",
 
 
 
+-- Add index for faster date lookups on notatki_dzienne
+CREATE INDEX "idx_notatki_dzienne_data" ON "public"."notatki_dzienne" USING "btree" ("data");
+
+
+
 CREATE UNIQUE INDEX "wizyty_data_godzina_active_unique" ON "public"."wizyty" USING "btree" ("data", "godzina") WHERE (("status" <> 'odwolana'::"text") OR ("status" IS NULL));
+
+
+
+-- Add constraint to prevent empty notes
+ALTER TABLE "public"."notatki_dzienne"
+    ADD CONSTRAINT "check_notatka_not_empty" CHECK (length(trim("tresc")) > 0);
 
 
 
@@ -384,6 +420,20 @@ CREATE POLICY "Wizyty full access for administrators" ON "public"."wizyty" TO "a
 
 
 
+-- Create RLS policy for notatki_dzienne
+CREATE POLICY "Notatki full access for administrators" 
+ON "public"."notatki_dzienne" 
+TO "authenticated" 
+USING (
+    EXISTS (
+        SELECT 1
+        FROM "public"."administrators"
+        WHERE "administrators"."email" = (auth.jwt() ->> 'email'::text)
+    )
+);
+
+
+
 CREATE POLICY "admin_delete_policy" ON "public"."administrators" FOR DELETE USING (true);
 
 
@@ -415,6 +465,10 @@ ALTER TABLE "public"."urlopy" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."wizyty" ENABLE ROW LEVEL SECURITY;
 
 
+-- Enable Row Level Security for notatki_dzienne
+ALTER TABLE "public"."notatki_dzienne" ENABLE ROW LEVEL SECURITY;
+
+
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
@@ -440,146 +494,15 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."wizyty";
 
 
 
+-- Add notatki_dzienne to realtime publication
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."notatki_dzienne";
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -678,6 +601,13 @@ GRANT ALL ON TABLE "public"."wizyty_pacjenci_view" TO "service_role";
 
 
 
+-- Grant permissions for notatki_dzienne
+GRANT ALL ON TABLE "public"."notatki_dzienne" TO "anon";
+GRANT ALL ON TABLE "public"."notatki_dzienne" TO "authenticated";
+GRANT ALL ON TABLE "public"."notatki_dzienne" TO "service_role";
+
+
+
 
 
 
@@ -725,17 +655,20 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
+-- Create trigger function to auto-update updated_at for notatki_dzienne
+CREATE OR REPLACE FUNCTION update_notatki_dzienne_updated_at()
+RETURNS TRIGGER AS \$\$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+\$\$ LANGUAGE plpgsql;
 
-
-
-
-
-
-
-
-
-
-
+-- Create trigger
+CREATE TRIGGER trigger_update_notatki_dzienne_updated_at
+    BEFORE UPDATE ON "public"."notatki_dzienne"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_notatki_dzienne_updated_at();
 
 
 RESET ALL;

@@ -15,6 +15,7 @@ import KartaPacjenta from "./KartaPacjenta";
 import { AdminManagement } from "./AdminManagement";
 import MessagesPage from "./MessagesPage";
 import DigitalClock from "./DigitalClock";
+import DailyNoteEditor from "./DailyNoteEditor";
 import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Settings, MessageSquare } from "lucide-react";
@@ -80,9 +81,26 @@ const Home = () => {
   };
 
   // Funkcja do wydruku wizyt na dzisiaj
-  const handlePrintTodayVisits = () => {
+  const handlePrintTodayVisits = async () => {
     const today = new Date();
     const todayStr = today.toLocaleDateString('pl-PL');
+    const todayDateStr = today.toISOString().split('T')[0];
+    
+    // Pobierz notatkę na dziś
+    let noteContent = '';
+    try {
+      const { data: noteData } = await supabase
+        .from('notatki_dzienne')
+        .select('tresc')
+        .eq('data', todayDateStr)
+        .maybeSingle();
+      
+      if (noteData) {
+        noteContent = noteData.tresc;
+      }
+    } catch (err) {
+      console.error('Error fetching note for print:', err);
+    }
     
     // Przygotuj zawartość do wydruku
     const printContent = `
@@ -130,6 +148,12 @@ const Home = () => {
               color: #666;
               font-size: 14px;
             }
+            .visit-notes {
+              color: #888;
+              font-size: 12px;
+              font-style: italic;
+              margin-top: 4px;
+            }
             .visit-status {
               min-width: 100px;
               text-align: right;
@@ -156,6 +180,24 @@ const Home = () => {
               text-align: center;
               font-weight: bold;
             }
+            .note-section {
+              margin-top: 30px;
+              padding: 15px;
+              background-color: #f9f9f9;
+              border: 1px solid #ddd;
+              border-radius: 8px;
+            }
+            .note-title {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              color: #333;
+            }
+            .note-content {
+              white-space: pre-wrap;
+              line-height: 1.6;
+              color: #555;
+            }
             @media print {
               body { margin: 0; }
               .no-print { display: none; }
@@ -175,6 +217,9 @@ const Home = () => {
                 <div class="visit-patient">
                   <div>${appointment.patientName}</div>
                   <div class="visit-type">${appointment.type}</div>
+                  ${appointment.notes ? `
+                    <div class="visit-notes">📋 ${appointment.notes}</div>
+                  ` : ''}
                 </div>
                 <div class="visit-status status-${appointment.status}">
                   ${appointment.status === 'zaplanowana' ? 'Zaplanowana' : 
@@ -188,6 +233,13 @@ const Home = () => {
           <div class="summary">
             RAZEM: ${dashboardData.todayAppointments.length} wizyt
           </div>
+
+          ${noteContent ? `
+            <div class="note-section">
+              <div class="note-title">📝 Notatka na dziś:</div>
+              <div class="note-content">${noteContent}</div>
+            </div>
+          ` : ''}
         </body>
       </html>
     `;
@@ -234,6 +286,7 @@ const Home = () => {
           godzina,
           rodzaj,
           status,
+          notatki,
           pacjenci!inner(imie, nazwisko, id)
         `)
         .eq("data", today)
@@ -265,6 +318,7 @@ const Home = () => {
         type: visit.rodzaj,
         patientId: visit.pacjenci.id,
         status: visit.status || 'zaplanowana',
+        notes: visit.notatki || '',
       })) || [];
 
       setDashboardData({
@@ -475,6 +529,12 @@ const Home = () => {
                   </Card>
                 </div>
               </div>
+
+              <DailyNoteEditor 
+                date={new Date().toISOString().split('T')[0]} 
+                variant="dashboard"
+                className="mb-6"
+              />
 
               <Card>
                 <CardHeader>

@@ -27,6 +27,9 @@ export type UrlopUpdate = Updates<"urlopy">;
 export type PlanPracy = Tables<"plany_pracy">;
 export type PlanPracyInsert = Inserts<"plany_pracy">;
 export type PlanPracyUpdate = Updates<"plany_pracy">;
+export type NotatkaDzienna = Tables<"notatki_dzienne">;
+export type NotatkaDziennaInsert = Inserts<"notatki_dzienne">;
+export type NotatkaDziennaUpdate = Updates<"notatki_dzienne">;
 
 // Visit status types
 export type VisitStatus = 'zaplanowana' | 'wykonana' | 'odwolana';

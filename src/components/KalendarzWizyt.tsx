@@ -34,6 +34,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import DailyNoteEditor from "./DailyNoteEditor";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
@@ -48,6 +49,7 @@ import {
   CheckCircle,
   X,
   Users,
+  Printer,
 } from "lucide-react";
 import {
   supabase,
@@ -1189,6 +1191,187 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setSelectedDate(new Date());
   };
 
+  // Funkcja do wydruku wizyt dla wybranego dnia
+  const handlePrintSelectedDayVisits = async () => {
+    if (!selectedDate) return;
+    
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const displayDateStr = format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl });
+    
+    // Pobierz notatkę dla wybranego dnia
+    let noteContent = '';
+    try {
+      const { data: noteData } = await supabase
+        .from('notatki_dzienne')
+        .select('tresc')
+        .eq('data', dateStr)
+        .maybeSingle();
+      
+      if (noteData) {
+        noteContent = noteData.tresc;
+      }
+    } catch (err) {
+      console.error('Error fetching note for print:', err);
+    }
+    
+    // Przygotuj zawartość do wydruku
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Wizyty na dzień ${displayDateStr}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              color: #333;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #333;
+              padding-bottom: 10px;
+              margin-bottom: 20px;
+            }
+            .clinic-name {
+              font-size: 24px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            .date {
+              font-size: 16px;
+              color: #666;
+            }
+            .visit-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 10px 0;
+              border-bottom: 1px solid #eee;
+            }
+            .visit-time {
+              font-weight: bold;
+              min-width: 80px;
+            }
+            .visit-patient {
+              flex: 1;
+              margin-left: 20px;
+            }
+            .visit-type {
+              color: #666;
+              font-size: 14px;
+            }
+            .visit-notes {
+              color: #888;
+              font-size: 12px;
+              font-style: italic;
+              margin-top: 4px;
+            }
+            .visit-status {
+              min-width: 100px;
+              text-align: right;
+              font-size: 12px;
+              padding: 2px 8px;
+              border-radius: 4px;
+            }
+            .status-zaplanowana {
+              background-color: #e3f2fd;
+              color: #1976d2;
+            }
+            .status-wykonana {
+              background-color: #e8f5e8;
+              color: #2e7d32;
+            }
+            .status-odwolana {
+              background-color: #ffebee;
+              color: #c62828;
+            }
+            .summary {
+              margin-top: 20px;
+              padding-top: 10px;
+              border-top: 2px solid #333;
+              text-align: center;
+              font-weight: bold;
+            }
+            .note-section {
+              margin-top: 30px;
+              padding: 15px;
+              background-color: #f9f9f9;
+              border: 1px solid #ddd;
+              border-radius: 8px;
+            }
+            .note-title {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              color: #333;
+            }
+            .note-content {
+              white-space: pre-wrap;
+              line-height: 1.6;
+              color: #555;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="clinic-name">KARTOTEKA</div>
+            <div class="date">WIZYTY NA DZIEŃ: ${displayDateStr}</div>
+          </div>
+          
+          ${wizytyNaDzien.length > 0 ? 
+            wizytyNaDzien.map(wizyta => `
+              <div class="visit-item">
+                <div class="visit-time">${wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)} - ${wizyta.godzina_do ? wizyta.godzina_do.substring(0, 5) : ''}</div>
+                <div class="visit-patient">
+                  <div>${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</div>
+                  <div class="visit-type">${wizyta.rodzaj}</div>
+                  ${wizyta.notatki ? `
+                    <div class="visit-notes">📋 ${wizyta.notatki}</div>
+                  ` : ''}
+                </div>
+                <div class="visit-status status-${wizyta.status || 'zaplanowana'}">
+                  ${wizyta.status === 'zaplanowana' || !wizyta.status ? 'Zaplanowana' : 
+                    wizyta.status === 'wykonana' ? 'Wykonana' : 'Odwołana'}
+                </div>
+              </div>
+            `).join('') : 
+            '<div style="text-align: center; padding: 40px; color: #666;">Brak wizyt na wybrany dzień</div>'
+          }
+          
+          <div class="summary">
+            RAZEM: ${wizytyNaDzien.length} wizyt
+          </div>
+
+          ${noteContent ? `
+            <div class="note-section">
+              <div class="note-title">📝 Notatka:</div>
+              <div class="note-content">${noteContent}</div>
+            </div>
+          ` : ''}
+        </body>
+      </html>
+    `;
+
+    // Otwórz nowe okno z zawartością do wydruku
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      // Poczekaj na załadowanie i otwórz dialog drukowania
+      printWindow.onload = () => {
+        printWindow.print();
+        printWindow.close();
+      };
+    }
+  };
+
+
+
   // Vacation management functions
   const handleAddVacation = () => {
     setSelectedUrlop(null);
@@ -1529,12 +1712,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         <div className="md:w-2/3">
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>
-                  {selectedDate
-                    ? format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })
-                    : "Wybierz datę"}
-                </CardTitle>
+              <div className="flex justify-end items-center">
                 <Tabs
                   value={selectedView}
                   onValueChange={setSelectedView}
@@ -1582,7 +1760,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                         </div>
                       )}
                     </div>
-                    <h3 className="text-lg font-medium">Wizyty na wybrany dzień</h3>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium">Wizyty na wybrany dzień</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePrintSelectedDayVisits}
+                        className="flex items-center space-x-2"
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Drukuj</span>
+                      </Button>
+                    </div>
                     <ScrollArea className="h-[500px] pr-4">
                       {wizytyNaDzien.length > 0 ? (
                         <div className="space-y-4">
@@ -1671,6 +1860,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                         </div>
                       )}
                     </ScrollArea>
+
+                    {/* Daily note for selected date */}
+                    <div className="mt-6">
+                      <DailyNoteEditor 
+                        date={selectedDateStr}
+                        variant="calendar"
+                      />
+                    </div>
                   </div>
                 </TabsContent>
 
