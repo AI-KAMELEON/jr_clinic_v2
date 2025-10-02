@@ -149,7 +149,7 @@ const Home = () => {
               font-size: 14px;
             }
             .visit-notes {
-              color: #888;
+              color: #333;
               font-size: 12px;
               font-style: italic;
               margin-top: 4px;
@@ -196,7 +196,7 @@ const Home = () => {
             .note-content {
               white-space: pre-wrap;
               line-height: 1.6;
-              color: #555;
+              color: #333;
             }
             @media print {
               body { margin: 0; }
@@ -218,7 +218,7 @@ const Home = () => {
                   <div>${appointment.patientName}</div>
                   <div class="visit-type">${appointment.type}</div>
                   ${appointment.notes ? `
-                    <div class="visit-notes">📋 ${appointment.notes}</div>
+                    <div class="visit-notes">+ ${appointment.notes}</div>
                   ` : ''}
                 </div>
                 <div class="visit-status status-${appointment.status}">
@@ -236,7 +236,7 @@ const Home = () => {
 
           ${noteContent ? `
             <div class="note-section">
-              <div class="note-title">📝 Notatka na dziś:</div>
+              <div class="note-title">+ Notatka na dziś:</div>
               <div class="note-content">${noteContent}</div>
             </div>
           ` : ''}

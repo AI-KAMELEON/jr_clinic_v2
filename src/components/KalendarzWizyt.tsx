@@ -1261,7 +1261,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
               font-size: 14px;
             }
             .visit-notes {
-              color: #888;
+              color: #333;
               font-size: 12px;
               font-style: italic;
               margin-top: 4px;
@@ -1308,7 +1308,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             .note-content {
               white-space: pre-wrap;
               line-height: 1.6;
-              color: #555;
+              color: #333;
             }
             @media print {
               body { margin: 0; }
@@ -1330,7 +1330,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                   <div>${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</div>
                   <div class="visit-type">${wizyta.rodzaj}</div>
                   ${wizyta.notatki ? `
-                    <div class="visit-notes">📋 ${wizyta.notatki}</div>
+                    <div class="visit-notes">+ ${wizyta.notatki}</div>
                   ` : ''}
                 </div>
                 <div class="visit-status status-${wizyta.status || 'zaplanowana'}">
@@ -1348,7 +1348,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
           ${noteContent ? `
             <div class="note-section">
-              <div class="note-title">📝 Notatka:</div>
+              <div class="note-title">+ Notatka:</div>
               <div class="note-content">${noteContent}</div>
             </div>
           ` : ''}
