@@ -51,6 +51,15 @@
 - [2025-10-02] Zmieniono format wydruku - usunięto emoji (📋, 📝), dodano znak + dla lepszej czytelności druku
 - [2025-10-02] Zmieniono kolory w wydruku na czarne (#333) dla lepszej widoczności i oszczędności tonera
 - [2025-10-02] Połączono dwie migracje SQL w jeden plik complete_schema.sql dla łatwiejszego zarządzania bazą danych
+- [2025-10-07] Uruchomiono aplikację w trybie deweloperskim - serwer Vite działa na http://localhost:5173
+- [2025-10-07] Zainstalowano wszystkie zależności projektu (295 pakietów, 0 podatności)
+- [2025-10-07] Zrestartowano serwer deweloperski na porcie 6200 - aplikacja działa na http://localhost:6200
+- [2025-10-07] Utworzono plik .env ze zmiennymi środowiskowymi Supabase
+- [2025-10-07] Naprawiono logikę wyszukiwania wolnych terminów w kalendarzu wizyt - teraz pokazuje wszystkie wolne terminy zamiast tylko ostatniego w danym dniu
+- [2025-10-07] Zaimplementowano funkcję append dla przycisku "Pokaż kolejne 10 terminów" - terminy są dodawane do listy zamiast zastępować poprzednie
+- [2025-10-07] Wprowadzono state currentSearchTimeIndex - zapamiętywanie pozycji w dniu dla kontynuacji wyszukiwania
+- [2025-10-07] Poprawiono logikę dodawania terminów - algorytm kontynuuje od miejsca, w którym skończył w poprzednim dniu
+- [2025-10-07] Przycisk "Znajdź najbliższe terminy" resetuje wyszukiwanie od początku, przycisk "Pokaż kolejne 10 terminów" kontynuuje od ostatniej pozycji
 
 # Podsumowanie przed zakończeniem pracy
 

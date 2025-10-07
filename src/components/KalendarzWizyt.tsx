@@ -101,6 +101,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     Array<{ date: string; time: string; displayDate: string }>
   >([]);
   const [currentSearchDate, setCurrentSearchDate] = useState<Date>(new Date());
+  const [currentSearchTimeIndex, setCurrentSearchTimeIndex] = useState(0);
 
   // Plan pracy
   const [planPracy, setPlanPracy] = useState<WorkSchedule>({
@@ -1511,6 +1512,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const znajdzNajblizszeTerminy = async (
     startDate: Date = new Date(),
     limit: number = 10,
+    startTimeIndex: number = 0,
+    append: boolean = false,
   ) => {
     setSearchingSlots(true);
     setError(null);
@@ -1520,49 +1523,70 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         [];
       let currentDate = new Date(startDate);
       let daysChecked = 0;
-      const maxDaysToCheck = 60; // Sprawdź maksymalnie 60 dni w przód
+      const maxDaysToCheck = 60;
       const now = new Date();
       const todayStr = format(now, "yyyy-MM-dd");
       const currentTime = format(now, "HH:mm:ss");
+      let currentTimeIndex = startTimeIndex;
+      let isFirstDay = true;
 
       while (slots.length < limit && daysChecked < maxDaysToCheck) {
-        // Sprawdź czy to dzień dostępny (roboczy i nie urlop)
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
-          // Pobierz wszystkie wizyty z tego dnia (exclude cancelled visits)
           const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
-
-          // Generuj godziny na podstawie planu pracy (30-minutowe sloty dla najbliższych terminów)
           const workingHours = generateWorkingHours(dataStr, '30min');
           
-          // Użyj wygenerowanych godzin (już przefiltrowanych przez generateWorkingHours)
           let wolneGodziny = workingHours;
 
-          // Jeśli to dzisiaj, usuń godziny które już minęły
           if (dataStr === todayStr) {
             wolneGodziny = wolneGodziny.filter(godzina => godzina > currentTime);
           }
 
-          // Dodaj wszystkie wolne godziny z tego dnia
-          for (const godzina of wolneGodziny) {
-            if (slots.length < limit) {
-              slots.push({
-                date: dataStr,
-                time: godzina,
-                displayDate: format(currentDate, "EEEE, d MMMM yyyy", {
-                  locale: pl,
-                }),
-              });
-            }
+          // Dla pierwszego dnia: zacznij od currentTimeIndex
+          // Dla kolejnych dni: zacznij od indeksu 0
+          const startIdx = isFirstDay ? currentTimeIndex : 0;
+          
+          // Dodaj wolne godziny zaczynając od właściwego indeksu
+          for (let i = startIdx; i < wolneGodziny.length && slots.length < limit; i++) {
+            const godzina = wolneGodziny[i];
+            slots.push({
+              date: dataStr,
+              time: godzina,
+              displayDate: format(currentDate, "EEEE, d MMMM yyyy", {
+                locale: pl,
+              }),
+            });
+            currentTimeIndex = i + 1;
           }
+
+          // Jeśli wykorzystaliśmy wszystkie godziny z tego dnia, zresetuj indeks i przejdź do następnego dnia
+          if (currentTimeIndex >= wolneGodziny.length) {
+            currentTimeIndex = 0;
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          // Jeśli osiągnęliśmy limit w trakcie dnia, zostajemy w tym samym dniu
+          else if (slots.length >= limit) {
+            break;
+          }
+        } else {
+          // Jeśli dzień niedostępny, przejdź do następnego
+          currentDate.setDate(currentDate.getDate() + 1);
+          currentTimeIndex = 0;
         }
 
-        currentDate.setDate(currentDate.getDate() + 1);
+        isFirstDay = false;
         daysChecked++;
       }
 
-      setAvailableSlots(slots);
+      // Dodaj do istniejących slotów jeśli append=true, w przeciwnym razie zastąp
+      if (append) {
+        setAvailableSlots(prev => [...prev, ...slots]);
+      } else {
+        setAvailableSlots(slots);
+      }
+      
       setCurrentSearchDate(new Date(currentDate));
+      setCurrentSearchTimeIndex(currentTimeIndex);
     } catch (err) {
       console.error("Error finding available slots:", err);
       setError("Błąd podczas wyszukiwania wolnych terminów");
@@ -1572,7 +1596,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   const znajdzKolejneTerminy = () => {
-    znajdzNajblizszeTerminy(currentSearchDate, 10);
+    znajdzNajblizszeTerminy(currentSearchDate, 10, currentSearchTimeIndex, true);
   };
 
   const selectTimeSlot = (date: string, time: string) => {
@@ -1591,7 +1615,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   // Inicjalne wyszukanie terminów
   useEffect(() => {
     if (wizyty.length > 0) {
-      znajdzNajblizszeTerminy();
+      znajdzNajblizszeTerminy(new Date(), 10, 0, false);
     }
   }, [wizyty]);
 
@@ -1649,7 +1673,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => znajdzNajblizszeTerminy()}
+                  onClick={() => znajdzNajblizszeTerminy(new Date(), 10, 0, false)}
                   className="w-full"
                   disabled={loading || searchingSlots}
                 >
