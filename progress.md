@@ -60,6 +60,8 @@
 - [2025-10-07] Wprowadzono state currentSearchTimeIndex - zapamiętywanie pozycji w dniu dla kontynuacji wyszukiwania
 - [2025-10-07] Poprawiono logikę dodawania terminów - algorytm kontynuuje od miejsca, w którym skończył w poprzednim dniu
 - [2025-10-07] Przycisk "Znajdź najbliższe terminy" resetuje wyszukiwanie od początku, przycisk "Pokaż kolejne 10 terminów" kontynuuje od ostatniej pozycji
+- [2025-10-07] Wypchnięto wszystkie poprawki do GitHub - commit 17b28cd
+- [2025-10-07] Naprawiono generowanie slotów w funkcji znajdzNajblizszeTerminy - zmiana z 30min na 15min dla pełnego pokazywania wolnych terminów
 
 # Podsumowanie przed zakończeniem pracy
 

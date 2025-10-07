@@ -1534,7 +1534,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
           const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
-          const workingHours = generateWorkingHours(dataStr, '30min');
+          const workingHours = generateWorkingHours(dataStr, '15min');
           
           let wolneGodziny = workingHours;
 
