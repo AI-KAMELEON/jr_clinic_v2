@@ -1515,6 +1515,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     limit: number = 10,
     startTimeIndex: number = 0,
     append: boolean = false,
+    overrideDuration?: '15min' | '30min',
   ) => {
     setSearchingSlots(true);
     setError(null);
@@ -1530,12 +1531,15 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const currentTime = format(now, "HH:mm:ss");
       let currentTimeIndex = startTimeIndex;
       let isFirstDay = true;
+      
+      // Użyj overrideDuration jeśli podano, w przeciwnym razie użyj state
+      const activeDuration = overrideDuration || slotDuration;
 
       while (slots.length < limit && daysChecked < maxDaysToCheck) {
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
           const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
-          const workingHours = generateWorkingHours(dataStr, slotDuration);
+          const workingHours = generateWorkingHours(dataStr, activeDuration);
           
           let wolneGodziny = workingHours;
 
@@ -1597,7 +1601,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   const znajdzKolejneTerminy = () => {
-    znajdzNajblizszeTerminy(currentSearchDate, 10, currentSearchTimeIndex, true);
+    znajdzNajblizszeTerminy(currentSearchDate, 10, currentSearchTimeIndex, true, slotDuration);
   };
 
   const selectTimeSlot = (date: string, time: string) => {
@@ -1616,7 +1620,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   // Inicjalne wyszukanie terminów
   useEffect(() => {
     if (wizyty.length > 0) {
-      znajdzNajblizszeTerminy(new Date(), 10, 0, false);
+      znajdzNajblizszeTerminy(new Date(), 10, 0, false, slotDuration);
     }
   }, [wizyty]);
 
@@ -1624,7 +1628,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   // useEffect removed - no automatic searching
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md w-full">
+    <div className="bg-white p-4 rounded-lg shadow-md w-full">
       {error && (
         <Alert className="mb-4">
           <AlertCircle className="h-4 w-4" />
@@ -1674,7 +1678,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => znajdzNajblizszeTerminy(new Date(), 10, 0, false)}
+                  onClick={() => znajdzNajblizszeTerminy(new Date(), 10, 0, false, slotDuration)}
                   className="w-full"
                   disabled={loading || searchingSlots}
                 >
@@ -1705,7 +1709,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                         onCheckedChange={(checked) => {
                           const newDuration = checked ? '30min' : '15min';
                           setSlotDuration(newDuration);
-                          znajdzNajblizszeTerminy(new Date(), 10, 0, false);
+                          znajdzNajblizszeTerminy(new Date(), 10, 0, false, newDuration);
                         }}
                       />
                       <span className={`text-sm font-medium transition-colors ${
@@ -1781,137 +1785,137 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 onValueChange={setSelectedView}
                 className="w-full"
               >
-                <TabsContent value="dzien" className="mt-0">
-                  <div className="space-y-4">
-                    <div className="text-center">
+                <TabsContent value="dzien" className="mt-0 h-[calc(100vh-280px)]">
+                  <div className="flex flex-col h-full">
+                    <div className="flex-shrink-0 text-center">
                       {isVacationDay(selectedDateStr) ? (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                          <h3 className="text-lg font-medium text-red-600 mb-2">
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                          <h3 className="text-sm font-medium text-red-600">
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
-                          <p className="text-red-500">Dzień urlopowy - klinika nie pracuje</p>
+                          <p className="text-xs text-red-500">Dzień urlopowy - klinika nie pracuje</p>
                         </div>
                       ) : isWorkingDay(selectedDateStr) ? (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                          <h3 className="text-lg font-medium text-green-600 mb-2">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                          <h3 className="text-sm font-medium text-green-600">
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
-                          <p className="text-green-600">
+                          <p className="text-xs text-green-600">
                             Godziny pracy: {planPracy[getDayName(selectedDate)].godziny.od} - {planPracy[getDayName(selectedDate)].godziny.do}
                           </p>
                         </div>
                       ) : (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                          <h3 className="text-lg font-medium text-gray-600 mb-2">
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                          <h3 className="text-sm font-medium text-gray-600">
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
-                          <p className="text-gray-500">Dzień wolny od pracy</p>
+                          <p className="text-xs text-gray-500">Dzień wolny od pracy</p>
                         </div>
                       )}
                     </div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium">Wizyty na wybrany dzień</h3>
+                    <div className="flex-shrink-0 flex justify-between items-center mb-2 mt-2">
+                      <h3 className="text-base font-medium">Wizyty na wybrany dzień</h3>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handlePrintSelectedDayVisits}
-                        className="flex items-center space-x-2"
+                        className="flex items-center space-x-1 h-7 px-2"
                       >
-                        <Printer className="h-4 w-4" />
-                        <span>Drukuj</span>
+                        <Printer className="h-3 w-3" />
+                        <span className="text-xs">Drukuj</span>
                       </Button>
                     </div>
-                    <ScrollArea className="h-[500px] pr-4">
+                    
+                    {/* WIZYTY - wypełniają dostępną przestrzeń */}
+                    <div className="flex-1 overflow-y-auto min-h-0 mb-2">
                       {wizytyNaDzien.length > 0 ? (
-                        <div className="space-y-4">
-                          {wizytyNaDzien.map((wizyta) => (
-                            <Card
-                              key={wizyta.id}
-                              className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
-                              onClick={() => handleWizytaClick(wizyta)}
-                              title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
-                            >
-                              <CardContent className="p-4">
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    <div className="flex items-center mb-2">
-                                      <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                                      <span className="font-medium">
-                                        {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
-                                        {wizyta.godzina_do && (
-                                          <span className="text-gray-500 ml-1">
-                                            - {wizyta.godzina_do.substring(0, 5)}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                    <h4 className="text-lg font-semibold hover:text-blue-600 transition-colors">
-                                      {wizyta.pacjenci.imie}{" "}
-                                      {wizyta.pacjenci.nazwisko}
-                                    </h4>
-                                    <p className="text-sm text-gray-600">
-                                      {wizyta.rodzaj}
-                                    </p>
-                                    {wizyta.notatki && (
-                                      <p className="text-sm mt-2 text-gray-500">
-                                        {wizyta.notatki}
-                                      </p>
-                                    )}
+                        <div className="grid grid-cols-2 gap-1 h-full content-start">
+                        {wizytyNaDzien.map((wizyta) => (
+                          <Card
+                            key={wizyta.id}
+                            className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
+                            onClick={() => handleWizytaClick(wizyta)}
+                            title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
+                          >
+                            <CardContent className="p-1.5">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center mb-0.5">
+                                    <Clock className="mr-1 text-gray-500 flex-shrink-0 h-2.5 w-2.5" />
+                                    <span className="font-medium text-[10px]">
+                                      {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
+                                      {wizyta.godzina_do && (
+                                        <span className="text-gray-500 ml-1">
+                                          - {wizyta.godzina_do.substring(0, 5)}
+                                        </span>
+                                      )}
+                                    </span>
                                   </div>
-                                  <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
-                                    {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
-                                      <>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
-                                          disabled={loading}
-                                          className="text-green-600 hover:text-green-700"
-                                        >
-                                          <CheckCircle className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
-                                          disabled={loading}
-                                          className="text-red-600 hover:text-red-700"
-                                        >
-                                          <X className="h-4 w-4" />
-                                        </Button>
-                                      </>
-                                    )}
+                                  <h4 className="font-semibold hover:text-blue-600 transition-colors truncate text-xs">
+                                    {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                  </h4>
+                                  <p className="text-gray-600 truncate text-[10px]">
+                                    {wizyta.rodzaj}
+                                  </p>
+                                </div>
+                                <div className="flex flex-col space-y-0.5" onClick={(e) => e.stopPropagation()}>
+                                  {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
+                                    <div className="flex space-x-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                        disabled={loading}
+                                        className="text-green-600 hover:text-green-700 p-0 h-5 w-5"
+                                      >
+                                        <CheckCircle className="h-2.5 w-2.5" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                        disabled={loading}
+                                        className="text-red-600 hover:text-red-700 p-0 h-5 w-5"
+                                      >
+                                        <X className="h-2.5 w-2.5" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                  <div className="flex space-x-1">
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleEditWizyta(wizyta)}
                                       disabled={loading}
+                                      className="p-0 h-5 w-5"
                                     >
-                                      <Edit className="h-4 w-4" />
+                                      <Edit className="h-2.5 w-2.5" />
                                     </Button>
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleDeleteWizyta(wizyta)}
                                       disabled={loading}
+                                      className="p-0 h-5 w-5"
                                     >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                      <Trash2 className="text-red-500 h-2.5 w-2.5" />
                                     </Button>
                                   </div>
                                 </div>
-                              </CardContent>
-                            </Card>
-                          ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                         </div>
                       ) : (
-                        <div className="text-center py-10 text-gray-500">
+                        <div className="text-center py-6 text-gray-500 text-sm">
                           Brak wizyt na wybrany dzień
                         </div>
                       )}
-                    </ScrollArea>
+                    </div>
 
-                    {/* Daily note for selected date */}
-                    <div className="mt-6">
+                    {/* NOTATKA DZIENNA - zawsze na dole */}
+                    <div className="flex-shrink-0">
                       <DailyNoteEditor 
                         date={selectedDateStr}
                         variant="calendar"
@@ -1968,14 +1972,17 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                         return (
                           <div
                             key={index}
-                            className={`border rounded-lg p-2 min-h-[120px] ${
+                            className={`border rounded-lg p-2 min-h-[120px] cursor-pointer ${
                               isVacation ? "bg-red-50 border-red-200" :
                               isToday ? "bg-blue-50 border-blue-200" : 
                               isSelected ? "bg-gray-50 border-gray-300" : 
                               isWorking ? "bg-white border-gray-200" :
                               "bg-gray-100 border-gray-200"
                             }`}
-                            onClick={() => setSelectedDate(date)}
+                            onClick={() => {
+                              setSelectedDate(date);
+                              setSelectedView("dzien");
+                            }}
                           >
                             <div className="text-center mb-2">
                               <div className="text-sm font-medium text-gray-600">
@@ -2084,7 +2091,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                               isCurrentMonth ? "bg-gray-100 border-gray-200" :
                               "bg-gray-50 border-gray-100 text-gray-400"
                             }`}
-                            onClick={() => setSelectedDate(date)}
+                            onClick={() => {
+                              setSelectedDate(date);
+                              setSelectedView("dzien");
+                            }}
                           >
                             <div className="text-center mb-1">
                               <div className={`text-sm font-medium ${

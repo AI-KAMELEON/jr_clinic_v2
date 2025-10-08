@@ -223,13 +223,13 @@ export const DailyNoteEditor: React.FC<DailyNoteEditorProps> = ({
 
   return (
     <Card className={className}>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center">
-          <StickyNote className="mr-2 h-5 w-5" />
+      <CardHeader className={variant === 'calendar' ? 'p-3' : ''}>
+        <CardTitle className={`flex items-center ${variant === 'calendar' ? 'text-sm' : 'text-lg'}`}>
+          <StickyNote className={`mr-2 ${variant === 'calendar' ? 'h-4 w-4' : 'h-5 w-5'}`} />
           {getTitle()}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className={variant === 'calendar' ? 'p-3' : ''}>
         {error && (
           <Alert className="mb-4" variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -243,25 +243,27 @@ export const DailyNoteEditor: React.FC<DailyNoteEditorProps> = ({
               value={noteContent}
               onChange={(e) => setNoteContent(e.target.value)}
               placeholder="Wpisz notatkę..."
-              className="min-h-[120px] resize-none"
+              className={`${variant === 'calendar' ? 'min-h-[60px] text-xs' : 'min-h-[120px]'} resize-none`}
               disabled={saving}
             />
-            <div className="flex justify-end space-x-2">
+            <div className={`flex justify-end ${variant === 'calendar' ? 'space-x-1' : 'space-x-2'}`}>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleCancel}
                 disabled={saving}
+                className={variant === 'calendar' ? 'h-7 px-2 text-xs' : ''}
               >
-                <X className="h-4 w-4 mr-1" />
+                <X className={`mr-1 ${variant === 'calendar' ? 'h-3 w-3' : 'h-4 w-4'}`} />
                 Anuluj
               </Button>
               <Button
                 size="sm"
                 onClick={handleSave}
                 disabled={saving || !noteContent.trim()}
+                className={variant === 'calendar' ? 'h-7 px-2 text-xs' : ''}
               >
-                <Save className="h-4 w-4 mr-1" />
+                <Save className={`mr-1 ${variant === 'calendar' ? 'h-3 w-3' : 'h-4 w-4'}`} />
                 {saving ? 'Zapisywanie...' : 'Zapisz'}
               </Button>
             </div>
@@ -269,24 +271,24 @@ export const DailyNoteEditor: React.FC<DailyNoteEditorProps> = ({
         ) : (
           <div className="space-y-3">
             {noteContent ? (
-              <div className="whitespace-pre-wrap text-sm bg-muted p-3 rounded-md min-h-[120px]">
+              <div className={`whitespace-pre-wrap bg-muted rounded-md ${variant === 'calendar' ? 'p-2 min-h-[60px] text-xs' : 'text-sm p-3 min-h-[120px]'}`}>
                 {noteContent}
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground italic">
+              <div className={`text-center text-muted-foreground italic ${variant === 'calendar' ? 'py-4 text-xs' : 'py-8'}`}>
                 Brak notatki na ten dzień
               </div>
             )}
-            <div className="flex justify-end space-x-2">
+            <div className={`flex justify-end ${variant === 'calendar' ? 'space-x-1' : 'space-x-2'}`}>
               {noteId && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleDeleteClick}
                   disabled={saving}
-                  className="text-red-600 hover:text-red-700"
+                  className={`text-red-600 hover:text-red-700 ${variant === 'calendar' ? 'h-7 px-2 text-xs' : ''}`}
                 >
-                  <Trash2 className="h-4 w-4 mr-1" />
+                  <Trash2 className={`mr-1 ${variant === 'calendar' ? 'h-3 w-3' : 'h-4 w-4'}`} />
                   Usuń
                 </Button>
               )}
@@ -295,8 +297,9 @@ export const DailyNoteEditor: React.FC<DailyNoteEditorProps> = ({
                 size="sm"
                 onClick={handleEdit}
                 disabled={saving}
+                className={variant === 'calendar' ? 'h-7 px-2 text-xs' : ''}
               >
-                <Edit2 className="h-4 w-4 mr-1" />
+                <Edit2 className={`mr-1 ${variant === 'calendar' ? 'h-3 w-3' : 'h-4 w-4'}`} />
                 {noteId ? 'Edytuj' : 'Dodaj notatkę'}
               </Button>
             </div>

@@ -66,6 +66,29 @@
 - [2025-10-08] Dodano przełącznik 15min/30min dla wyszukiwania wolnych terminów
 - [2025-10-08] Użytkownik może teraz wybierać czy szukać slotów 15-minutowych czy 30-minutowych
 - [2025-10-08] Przełącznik automatycznie przelicza i wyświetla nowe wyniki po zmianie
+- [2025-10-08] Naprawiono błąd asynchroniczności setState - przełącznik teraz pokazuje właściwe sloty
+- [2025-10-08] Dodano parametr overrideDuration do funkcji znajdzNajblizszeTerminy dla natychmiastowej zmiany rozmiaru slotu
+- [2025-10-08] Zoptymalizowano widok dzienny kalendarza wizyt - dwukolumnowy layout bez przewijania
+- [2025-10-08] Zmniejszono rozmiary elementów: nagłówki, karty wizyt, przyciski akcji dla lepszej widoczności
+- [2025-10-08] Usunięto ScrollArea - wszystkie wizyty widoczne jednocześnie w układzie grid 2 kolumny
+- [2025-10-08] Dodano truncate i line-clamp dla długich tekstów w kompaktowym widoku
+- [2025-10-08] Zaimplementowano dynamiczne skalowanie wizyt - jeśli > 22 wizyty, automatycznie zmniejsza rozmiary
+- [2025-10-08] Zmniejszono komponent DailyNoteEditor dla wariantu calendar - kompaktowy widok (60px zamiast 120px)
+- [2025-10-08] Przy > 22 wizytach: mniejszy padding (p-1.5), mniejszy gap (gap-1), mniejszy tekst (text-[10px]), ukryte notatki wizyt
+- [2025-10-08] System automatycznie dostosowuje się do liczby wizyt zapewniając widoczność wszystkich bez przewijania
+- [2025-10-08] Zaimplementowano flexbox layout - notatka dzienna zawsze na dole strony
+- [2025-10-08] Wizyty wypełniają dostępną przestrzeń między nagłówkiem a notatką (flex-1 z overflow-y-auto)
+- [2025-10-08] Wysokość widoku dostosowana do viewport: h-[calc(100vh-280px)]
+- [2025-10-08] Scroll pojawia się tylko dla sekcji wizyt gdy jest ich więcej niż mieści się w dostępnej przestrzeni
+- [2025-10-08] Ujednolicono rozmiar kart wizyt - zawsze kompaktowy widok niezależnie od liczby wizyt
+- [2025-10-08] Usunięto dynamiczne skalowanie (warunek > 22 wizyty) - wszystkie wizyty zawsze w tym samym, małym rozmiarze
+- [2025-10-08] Stałe wartości: gap-1, p-1.5, text-[10px], text-xs, h-2.5 w-2.5, h-5 w-5 dla wszystkich wizyt
+- [2025-10-08] Zoptymalizowano układ kalendarza wizyt - zmniejszono padding głównego kontenera z p-6 na p-4
+- [2025-10-08] Przywrócono oryginalną wysokość widoku dziennego h-[calc(100vh-280px)]
+- [2025-10-08] Zysk przestrzeni: ~16px więcej dzięki zmniejszonemu paddingowi przy zachowaniu wszystkiego na jednej stronie bez scrollu
+- [2025-10-08] Dodano automatyczne przełączanie na widok dzienny po kliknięciu w dzień w widoku tygodnia
+- [2025-10-08] Dodano automatyczne przełączanie na widok dzienny po kliknięciu w dzień w widoku miesiąca
+- [2025-10-08] Funkcja onClick automatycznie ustawia datę i przełącza widok dla wygodniejszej nawigacji
 
 # Podsumowanie przed zakończeniem pracy
 
