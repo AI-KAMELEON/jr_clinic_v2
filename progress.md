@@ -62,6 +62,10 @@
 - [2025-10-07] Przycisk "Znajdź najbliższe terminy" resetuje wyszukiwanie od początku, przycisk "Pokaż kolejne 10 terminów" kontynuuje od ostatniej pozycji
 - [2025-10-07] Wypchnięto wszystkie poprawki do GitHub - commit 17b28cd
 - [2025-10-07] Naprawiono generowanie slotów w funkcji znajdzNajblizszeTerminy - zmiana z 30min na 15min dla pełnego pokazywania wolnych terminów
+- [2025-10-07] Wypchnięto poprawkę do GitHub - commit deea4fd
+- [2025-10-08] Dodano przełącznik 15min/30min dla wyszukiwania wolnych terminów
+- [2025-10-08] Użytkownik może teraz wybierać czy szukać slotów 15-minutowych czy 30-minutowych
+- [2025-10-08] Przełącznik automatycznie przelicza i wyświetla nowe wyniki po zmianie
 
 # Podsumowanie przed zakończeniem pracy
 

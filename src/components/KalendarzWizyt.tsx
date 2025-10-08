@@ -102,6 +102,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   >([]);
   const [currentSearchDate, setCurrentSearchDate] = useState<Date>(new Date());
   const [currentSearchTimeIndex, setCurrentSearchTimeIndex] = useState(0);
+  const [slotDuration, setSlotDuration] = useState<'15min' | '30min'>('15min');
 
   // Plan pracy
   const [planPracy, setPlanPracy] = useState<WorkSchedule>({
@@ -1534,7 +1535,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
           const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
-          const workingHours = generateWorkingHours(dataStr, '15min');
+          const workingHours = generateWorkingHours(dataStr, slotDuration);
           
           let wolneGodziny = workingHours;
 
@@ -1687,9 +1688,33 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
               {/* Sekcja z dostępnymi terminami */}
               {availableSlots.length > 0 && (
                 <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-4">
-                    Najbliższe wolne terminy
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium">
+                      Najbliższe wolne terminy
+                    </h3>
+                    
+                    {/* Przełącznik 15min/30min */}
+                    <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                      <span className={`text-sm font-medium transition-colors ${
+                        slotDuration === '15min' ? 'text-blue-600' : 'text-gray-500'
+                      }`}>
+                        15 min
+                      </span>
+                      <Switch
+                        checked={slotDuration === '30min'}
+                        onCheckedChange={(checked) => {
+                          const newDuration = checked ? '30min' : '15min';
+                          setSlotDuration(newDuration);
+                          znajdzNajblizszeTerminy(new Date(), 10, 0, false);
+                        }}
+                      />
+                      <span className={`text-sm font-medium transition-colors ${
+                        slotDuration === '30min' ? 'text-blue-600' : 'text-gray-500'
+                      }`}>
+                        30 min
+                      </span>
+                    </div>
+                  </div>
                   <ScrollArea className="h-[300px] pr-4">
                     <div className="space-y-2">
                       {availableSlots.map((slot, index) => (
