@@ -94,6 +94,9 @@
 
 - [2024-12-19] Analiza ujawniła zaawansowany system zarządzania pacjentami i wizytami z pełną integracją Supabase
 - [2024-12-19] System ma solidną architekturę i intuicyjny UX, ale wymaga dodania autoryzacji
+- [2025-10-08] Przeprowadzono kompleksową optymalizację kalendarza wizyt - ujednolicono rozmiary, dodano automatyczne przełączanie widoków
+- [2025-10-08] Wszystkie zmiany wypchnięte do GitHub - commit cfddb6c
+- [2025-10-08] System kalendarza działa płynnie z kompaktowym widokiem i intuicyjną nawigacją między widokami
 - [2024-12-19] Zidentyfikowano obszary do poprawy: brak walidacji formularzy, ograniczone widoki kalendarza
 - [2024-12-19] Projekt ma duży potencjał rozwoju: powiadomienia, raporty, mobilna aplikacja
 - [2024-12-19] Zaimplementowano kompleksowy system zarządzania urlopami z walidacją i wizualizacją
