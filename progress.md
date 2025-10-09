@@ -89,6 +89,11 @@
 - [2025-10-08] Dodano automatyczne przełączanie na widok dzienny po kliknięciu w dzień w widoku tygodnia
 - [2025-10-08] Dodano automatyczne przełączanie na widok dzienny po kliknięciu w dzień w widoku miesiąca
 - [2025-10-08] Funkcja onClick automatycznie ustawia datę i przełącza widok dla wygodniejszej nawigacji
+- [2025-10-09] Przywrócono wcześniejszą wersję wyświetlania wizyt w widoku dziennym kalendarza
+- [2025-10-09] Zmieniono z dwukolumnowego układu grid (grid-cols-2) na jednokolumnowy z ScrollArea
+- [2025-10-09] Zwiększono rozmiary kart wizyt: padding p-1.5→p-4, czcionki text-[10px]→text-sm/lg, ikony h-2.5→h-4
+- [2025-10-09] Przywrócono wyświetlanie notatek wizyt w kartach (wcześniej ukryte w kompaktowym widoku)
+- [2025-10-09] Włączono scrollowanie dla listy wizyt - każda wizyta w osobnym wierszu z pełnymi szczegółami
 
 # Podsumowanie przed zakończeniem pracy
 
@@ -97,6 +102,41 @@
 - [2025-10-08] Przeprowadzono kompleksową optymalizację kalendarza wizyt - ujednolicono rozmiary, dodano automatyczne przełączanie widoków
 - [2025-10-08] Wszystkie zmiany wypchnięte do GitHub - commit cfddb6c
 - [2025-10-08] System kalendarza działa płynnie z kompaktowym widokiem i intuicyjną nawigacją między widokami
+- [2025-10-09] Przywrócono wcześniejszą wersję układu wizyt w kalendarzu - jednokolumnowy widok ze scrollowaniem zamiast dwukolumnowego kompaktowego
+- [2025-10-09] Użytkownik preferuje wersję z większymi kartami wizyt, wyświetlaniem notatek i możliwością przewijania
+- [2025-10-08] Utworzono MIGRATION_GUIDE.md - kompletny przewodnik kopiowania aplikacji dla nowej firmy
+- [2025-10-08] Utworzono VOICE_AUTOMATION_GUIDE.md - pełna dokumentacja automatyzacji telefonicznej z Twilio + ElevenLabs + Supabase
+- [2025-10-08] Utworzono CROSS_PLATFORM_GUIDE.md - kompletny przewodnik wdrożenia na 6 platform (Web, PWA, iOS, Android, macOS, Windows)
+- [2025-10-08] Utworzono MEDICAL_CLINIC_SAAS_GUIDE.md - najważniejszy przewodnik dla transformacji w Medical SaaS:
+  * 13 rozdziałów, ~150 KB treści technicznej
+  * Szczegółowe flow: compliance → security → multi-tenant → onboarding → voice AI → pricing
+  * Wszystkie aspekty prawne (RODO Art. 9, retencja 10-20 lat, DPA templates)
+  * Kod SQL, TypeScript, React - gotowe do implementacji
+  * Tabele kosztów, porównania, decyzje architektoniczne
+  * Model SaaS: 90% margin przy 100 klinikach
+- [2025-10-08] Zaktualizowano README.md i progress.md - dodano odniesienia do wszystkich przewodników
+- [2025-10-08] Roadmap podzielony na 5 faz: MVP → Voice AI → Mobile/Desktop → Security → Advanced
+- [2025-10-08] Utworzono SAAS_BUSINESS_MODEL.md - kompleksowy model biznesowy (42 KB):
+  * Executive Summary (LTV:CAC 39:1, Break-even Month 8)
+  * Problem & Solution (małe kliniki, Excel → SaaS)
+  * Value Proposition (ROI < 2 miesiące)
+  * Target Market (10K klinik w PL, TAM $11.88M)
+  * Revenue Model (Subscription MRR + Add-ons)
+  * Pricing Strategy (Starter $29, Pro $99, Enterprise $299+)
+  * Cost Structure ($100/mo infrastructure, CAC $200, 75% margin)
+  * Customer Acquisition (Google Ads, SEO, Referrals, Direct Sales)
+  * Financial Projections (Year 1: $47K MRR → Year 5: $812K MRR, Exit $78-97M)
+  * Go-to-Market Strategy (4 fazy: Beta → Early → Growth → Scale)
+  * Competitive Analysis (vs Competitor A/B, Excel)
+  * Risks & Mitigation (8 ryzyk z planem działania)
+  * Metrics & KPIs (North Star: MRR, Dashboard)
+- [2025-10-08] Utworzono SAAS_COMPLETE_ARCHITECTURE.md - architektura techniczna (35 KB, sekcje 1-5):
+  * System Architecture Overview (diagram, tech stack)
+  * Multi-Tenant Database Design (complete schema SQL, RLS policies)
+  * Authentication & Authorization (Supabase Auth, RBAC matrix, usePermissions)
+  * Data Security & Encryption (4 warstwy: TLS + field-level + at-rest + backups)
+  * API Architecture (Edge Functions: verify-patient, get-slots, book-appointment)
+  * Sekcje 6-15 w przygotowaniu (Frontend, Backend, Infrastructure, Monitoring, Scalability, DR, Performance, Compliance, Development Workflow)
 - [2024-12-19] Zidentyfikowano obszary do poprawy: brak walidacji formularzy, ograniczone widoki kalendarza
 - [2024-12-19] Projekt ma duży potencjał rozwoju: powiadomienia, raporty, mobilna aplikacja
 - [2024-12-19] Zaimplementowano kompleksowy system zarządzania urlopami z walidacją i wizualizacją
@@ -118,17 +158,94 @@
 
 # Dalsze zadania
 
-- [2024-12-19] Implementacja systemu autoryzacji i logowania
-- [2024-12-19] Dodanie walidacji formularzy z react-hook-form + Zod
-- [2024-12-19] Implementacja systemu powiadomień (SMS/email)
-- [2024-12-19] Dodanie funkcji eksportu danych i raportów
-- [2024-12-19] Optymalizacja UX i dodanie animacji
-- [2024-12-19] Dodanie możliwości konfiguracji godzin pracy dla poszczególnych dni
-- [2024-12-19] Implementacja systemu rezerwacji online dla pacjentów
-- [2024-12-19] Dodanie systemu powiadomień SMS/email o wizytach
-- [2024-12-19] Implementacja raportów i statystyk kliniki
-- [2024-12-19] Dodanie funkcji eksportu danych do Excel/PDF
-- [2024-12-19] Optymalizacja wydajności i dodanie cache'owania
-- [2024-12-19] Implementacja systemu backup'u i przywracania danych
-- [2024-12-19] Dodanie funkcji wielojęzyczności (i18n)
-- [2024-12-19] Implementacja systemu ról i uprawnień użytkowników
+## Faza 1: SaaS MVP (3 miesiące)
+- [2025-10-08] Implementacja multi-tenant database (Supabase)
+  * Dodanie kolumny organization_id do wszystkich tabel
+  * Konfiguracja RLS policies dla izolacji danych
+  * Tabela organizations, organization_roles, phone_numbers
+- [2025-10-08] Onboarding wizard (3-step)
+  * Step 1: Dane kliniki (nazwa, adres, NIP, kontakt)
+  * Step 2: Wybór planu (Starter/Pro/Enterprise)
+  * Step 3: Setup (lekarze, godziny pracy, import pacjentów)
+- [2025-10-08] Integracja Stripe Subscriptions
+  * Checkout flow
+  * Webhook handlers (subscription.created/updated/cancelled)
+  * Customer portal
+- [2025-10-08] Szyfrowanie danych medycznych
+  * Field-level encryption (AES-256-GCM)
+  * Supabase Vault dla kluczy
+  * Funkcje encrypt_medical_data / decrypt_medical_data
+
+## Faza 2: Voice AI (2 miesiące)
+- [2025-10-08] Twilio integration
+  * Zakup numeru Twilio
+  * TwiML webhook configuration
+  * Call recording
+- [2025-10-08] ElevenLabs Conversational AI
+  * Agent setup z custom prompt
+  * Custom tools/variables (patient_id, available_slots)
+  * Webhook integration z Supabase Edge Functions
+- [2025-10-08] Edge Functions dla Voice AI
+  * verify-patient (identyfikacja po PESEL/telefon)
+  * get-available-slots (wolne terminy)
+  * book-appointment (rezerwacja)
+  * cancel-appointment (anulowanie)
+- [2025-10-08] Tabela phone_conversations (logi rozmów)
+
+## Faza 3: Mobile & Desktop Apps (3 miesiące)
+- [2025-10-08] PWA (Progressive Web App)
+  * Service worker
+  * Manifest.json
+  * Offline mode
+  * Add to home screen
+- [2025-10-08] Capacitor dla iOS/Android
+  * Installation i konfiguracja
+  * Build dla App Store / Google Play
+  * Push notifications
+  * Camera access (zdjęcia pacjentów)
+- [2025-10-08] Tauri dla Desktop (macOS/Windows/Linux)
+  * Installation i konfiguracja
+  * Build dla wszystkich platform
+  * Auto-update mechanism
+  * System tray integration
+
+## Faza 4: Compliance & Security
+- [2025-10-08] RODO/GDPR compliance
+  * DPA templates (Data Processing Agreement)
+  * Consent management UI
+  * Data anonymization (po retencji)
+  * Export danych pacjenta (prawo dostępu)
+- [2025-10-08] Audit logs
+  * medical_audit_logs table
+  * Automatyczne logowanie wszystkich akcji
+  * UI do przeglądania logów (admin)
+- [2025-10-08] Backup strategy
+  * Daily backups (30 dni retencji)
+  * Weekly backups (6 miesięcy)
+  * Monthly backups (10 lat)
+  * Point-in-Time Recovery (7 dni)
+- [2025-10-08] Penetration testing
+  * Bug bounty program (Bugcrowd/HackerOne)
+  * Lub dedicated pentest firm
+- [2025-10-08] ISO 27001 certification (opcjonalnie)
+
+## Faza 5: Advanced Features
+- [2025-10-08] Multi-SMS providers
+  * Play, SMSAPI.pl, Twilio
+  * UI do wyboru providera w settings
+  * send-sms-universal Edge Function
+- [2025-10-08] Admin dashboard (dla Ciebie jako SaaS owner)
+  * Lista wszystkich klinik
+  * Statystyki (revenue, usage)
+  * Zarządzanie subskrypcjami
+  * Support tickets
+- [2025-10-08] Telemedycyna (opcjonalnie)
+  * Video calls (WebRTC)
+  * E-recepty
+  * E-zwolnienia
+- [2025-10-08] NFZ integration (Polska)
+  * Weryfikacja uprawnień pacjenta
+  * Raportowanie wizyt (XML)
+- [2025-10-08] Multilanguage (i18n)
+  * Polski, angielski (minimum)
+  * react-i18next

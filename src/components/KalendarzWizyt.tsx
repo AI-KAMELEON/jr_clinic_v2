@@ -1826,92 +1826,97 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       </Button>
                     </div>
                     
-                    {/* WIZYTY - wypełniają dostępną przestrzeń */}
-                    <div className="flex-1 overflow-y-auto min-h-0 mb-2">
-                      {wizytyNaDzien.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-1 h-full content-start">
-                        {wizytyNaDzien.map((wizyta) => (
-                          <Card
-                            key={wizyta.id}
-                            className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
-                            onClick={() => handleWizytaClick(wizyta)}
-                            title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
-                          >
-                            <CardContent className="p-1.5">
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center mb-0.5">
-                                    <Clock className="mr-1 text-gray-500 flex-shrink-0 h-2.5 w-2.5" />
-                                    <span className="font-medium text-[10px]">
-                                      {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
-                                      {wizyta.godzina_do && (
-                                        <span className="text-gray-500 ml-1">
-                                          - {wizyta.godzina_do.substring(0, 5)}
+                    {/* WIZYTY - ScrollArea z jedną wizytą w wierszu */}
+                    <div className="flex-1 min-h-0 mb-2">
+                      <ScrollArea className="h-full">
+                        {wizytyNaDzien.length > 0 ? (
+                          <div className="space-y-3 pr-4">
+                            {wizytyNaDzien.map((wizyta) => (
+                              <Card
+                                key={wizyta.id}
+                                className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
+                                onClick={() => handleWizytaClick(wizyta)}
+                                title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
+                              >
+                                <CardContent className="p-4">
+                                  <div className="flex justify-between items-start gap-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center mb-2">
+                                        <Clock className="mr-2 text-gray-500 flex-shrink-0 h-4 w-4" />
+                                        <span className="font-medium text-sm">
+                                          {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
+                                          {wizyta.godzina_do && (
+                                            <span className="text-gray-500 ml-2">
+                                              - {wizyta.godzina_do.substring(0, 5)}
+                                            </span>
+                                          )}
                                         </span>
+                                      </div>
+                                      <h4 className="font-semibold text-lg hover:text-blue-600 transition-colors">
+                                        {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                      </h4>
+                                      <p className="text-gray-600 text-sm mt-1">
+                                        {wizyta.rodzaj}
+                                      </p>
+                                      {wizyta.notatki && (
+                                        <p className="text-gray-500 text-xs mt-2 italic">
+                                          {wizyta.notatki}
+                                        </p>
                                       )}
-                                    </span>
-                                  </div>
-                                  <h4 className="font-semibold hover:text-blue-600 transition-colors truncate text-xs">
-                                    {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
-                                  </h4>
-                                  <p className="text-gray-600 truncate text-[10px]">
-                                    {wizyta.rodzaj}
-                                  </p>
-                                </div>
-                                <div className="flex flex-col space-y-0.5" onClick={(e) => e.stopPropagation()}>
-                                  {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
-                                    <div className="flex space-x-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
-                                        disabled={loading}
-                                        className="text-green-600 hover:text-green-700 p-0 h-5 w-5"
-                                      >
-                                        <CheckCircle className="h-2.5 w-2.5" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
-                                        disabled={loading}
-                                        className="text-red-600 hover:text-red-700 p-0 h-5 w-5"
-                                      >
-                                        <X className="h-2.5 w-2.5" />
-                                      </Button>
                                     </div>
-                                  )}
-                                  <div className="flex space-x-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleEditWizyta(wizyta)}
-                                      disabled={loading}
-                                      className="p-0 h-5 w-5"
-                                    >
-                                      <Edit className="h-2.5 w-2.5" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteWizyta(wizyta)}
-                                      disabled={loading}
-                                      className="p-0 h-5 w-5"
-                                    >
-                                      <Trash2 className="text-red-500 h-2.5 w-2.5" />
-                                    </Button>
+                                    <div className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
+                                      {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
+                                        <div className="flex space-x-2">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                            disabled={loading}
+                                            className="text-green-600 hover:text-green-700"
+                                          >
+                                            <CheckCircle className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                            disabled={loading}
+                                            className="text-red-600 hover:text-red-700"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      )}
+                                      <div className="flex space-x-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleEditWizyta(wizyta)}
+                                          disabled={loading}
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleDeleteWizyta(wizyta)}
+                                          disabled={loading}
+                                        >
+                                          <Trash2 className="text-red-500 h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-6 text-gray-500 text-sm">
-                          Brak wizyt na wybrany dzień
-                        </div>
-                      )}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            Brak wizyt na wybrany dzień
+                          </div>
+                        )}
+                      </ScrollArea>
                     </div>
 
                     {/* NOTATKA DZIENNA - zawsze na dole */}
