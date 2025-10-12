@@ -194,20 +194,52 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     }
   };
 
-  const handleDaneSubmit = () => {
-    const updatedPacjent = {
-      ...pacjent,
-      imie: formDane.imie,
-      nazwisko: formDane.nazwisko,
-      telefon: formDane.telefon,
-      email: formDane.email,
-      adres: formDane.adres,
-      pesel: formDane.brakPesel ? null : formDane.pesel,
-      brakPesel: formDane.brakPesel,
-      notatkiOgolne: formDane.notatkiOgolne,
-    };
-    setPacjent(updatedPacjent);
-    setEdytujDane(false);
+  const handleDaneSubmit = async () => {
+    try {
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        imie: formDane.imie,
+        nazwisko: formDane.nazwisko,
+        telefon: formDane.telefon,
+        email: formDane.email,
+        adres: formDane.adres,
+        pesel: formDane.brakPesel ? null : formDane.pesel,
+        brak_pesel: formDane.brakPesel,
+        notatki: formDane.notatkiOgolne,
+      };
+
+      // Zapisz do bazy danych
+      const { error } = await supabase
+        .from('pacjenci')
+        .update(updateData)
+        .eq('id', pacjentId);
+
+      if (error) {
+        console.error('Error updating patient:', error);
+        alert('Błąd podczas zapisywania danych pacjenta');
+        return;
+      }
+
+      // Aktualizuj lokalny stan
+      const updatedPacjent = {
+        ...pacjent,
+        imie: formDane.imie,
+        nazwisko: formDane.nazwisko,
+        telefon: formDane.telefon,
+        email: formDane.email,
+        adres: formDane.adres,
+        pesel: formDane.brakPesel ? null : formDane.pesel,
+        brakPesel: formDane.brakPesel,
+        notatkiOgolne: formDane.notatkiOgolne,
+      };
+      setPacjent(updatedPacjent);
+      setEdytujDane(false);
+      
+      console.log('Dane pacjenta zostały zaktualizowane');
+    } catch (err) {
+      console.error('Error updating patient:', err);
+      alert('Wystąpił błąd podczas zapisywania');
+    }
   };
 
   // Obsługa formularza wizyty

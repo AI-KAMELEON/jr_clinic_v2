@@ -94,6 +94,17 @@
 - [2025-10-09] Zwiększono rozmiary kart wizyt: padding p-1.5→p-4, czcionki text-[10px]→text-sm/lg, ikony h-2.5→h-4
 - [2025-10-09] Przywrócono wyświetlanie notatek wizyt w kartach (wcześniej ukryte w kompaktowym widoku)
 - [2025-10-09] Włączono scrollowanie dla listy wizyt - każda wizyta w osobnym wierszu z pełnymi szczegółami
+- [2025-10-12] Uruchomiono aplikację w trybie deweloperskim - serwer Vite działa na http://localhost:5173
+- [2025-10-12] Naprawiono funkcję selectTimeSlot w kalendarzu wizyt - automatyczne ustawianie długości wizyty (15min/30min)
+- [2025-10-12] Formularz "Dodaj wizytę" teraz automatycznie wypełnia się danymi wybranego slotu (data, godzina, długość wizyty)
+- [2025-10-12] Dodano wyświetlanie numeru telefonu pacjenta w kartach wizyt w kalendarzu - telefon widoczny w tym samym wierszu co nazwisko
+- [2025-10-12] Zaimplementowano pełną elastyczność zarządzania statusami wizyt z możliwością cofania decyzji
+- [2025-10-12] Status ZAPLANOWANA: przyciski [Wykonana] [Odwołana]
+- [2025-10-12] Status WYKONANA: przycisk [Cofnij] - powrót do zaplanowana
+- [2025-10-12] Status ODWOŁANA: przyciski [Wykonana] [Cofnij] - pacjent może się spóźnić lub pomyłka w anulowaniu
+- [2025-10-12] Dodano ikonę RotateCcw (cofnij) dla intuicyjnego przywracania do stanu początkowego
+- [2025-10-12] Naprawiono zapisywanie danych pacjenta w karcie pacjenta - zmiany są teraz zapisywane do bazy danych Supabase
+- [2025-10-12] Funkcja handleDaneSubmit teraz asynchronicznie zapisuje zmiany do bazy przed aktualizacją lokalnego stanu
 
 # Podsumowanie przed zakończeniem pracy
 
@@ -104,6 +115,9 @@
 - [2025-10-08] System kalendarza działa płynnie z kompaktowym widokiem i intuicyjną nawigacją między widokami
 - [2025-10-09] Przywrócono wcześniejszą wersję układu wizyt w kalendarzu - jednokolumnowy widok ze scrollowaniem zamiast dwukolumnowego kompaktowego
 - [2025-10-09] Użytkownik preferuje wersję z większymi kartami wizyt, wyświetlaniem notatek i możliwością przewijania
+- [2025-10-09] Pomyślnie wypchnięto zmiany do GitHub używając Personal Access Token (fine-grained)
+- [2025-10-09] Commit c62517b: "Przywrócono jednokolumnowy widok wizyt ze scrollowaniem w kalendarzu"
+- [2025-10-09] System kalendarza działa stabilnie z jednokolumnowym layoutem, ScrollArea i pełnymi szczegółami wizyt
 - [2025-10-08] Utworzono MIGRATION_GUIDE.md - kompletny przewodnik kopiowania aplikacji dla nowej firmy
 - [2025-10-08] Utworzono VOICE_AUTOMATION_GUIDE.md - pełna dokumentacja automatyzacji telefonicznej z Twilio + ElevenLabs + Supabase
 - [2025-10-08] Utworzono CROSS_PLATFORM_GUIDE.md - kompletny przewodnik wdrożenia na 6 platform (Web, PWA, iOS, Android, macOS, Windows)

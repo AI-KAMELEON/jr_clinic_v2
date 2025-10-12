@@ -50,6 +50,8 @@ import {
   X,
   Users,
   Printer,
+  Phone,
+  RotateCcw,
 } from "lucide-react";
 import {
   supabase,
@@ -1608,11 +1610,19 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setSelectedPacjent(null);
     setSearchQuery("");
     setSearchResults([]);
+    
+    // Ustaw visitDuration na podstawie slotDuration
+    setVisitDuration(slotDuration);
+    
+    // Oblicz czasy wizyty na podstawie wybranego slotu
+    const visitTimes = updateVisitTimes(time, slotDuration);
+    
     setNowaWizyta({
       ...nowaWizyta,
       data: date,
-      godzina: time,
+      ...visitTimes,
     });
+    
     setSelectedDate(new Date(date + "T00:00:00"));
     setIsDialogOpen(true);
   };
@@ -1852,9 +1862,15 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                           )}
                                         </span>
                                       </div>
-                                      <h4 className="font-semibold text-lg hover:text-blue-600 transition-colors">
-                                        {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
-                                      </h4>
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <h4 className="font-semibold text-lg hover:text-blue-600 transition-colors">
+                                          {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                        </h4>
+                                        <div className="flex items-center text-gray-600 text-sm">
+                                          <Phone className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
+                                          <span>{wizyta.pacjenci.telefon}</span>
+                                        </div>
+                                      </div>
                                       <p className="text-gray-600 text-sm mt-1">
                                         {wizyta.rodzaj}
                                       </p>
@@ -1865,28 +1881,74 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                       )}
                                     </div>
                                     <div className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
-                                      {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
-                                        <div className="flex space-x-2">
+                                      {/* Przyciski statusów - różne opcje w zależności od aktualnego statusu */}
+                                      <div className="flex space-x-2">
+                                        {/* ZAPLANOWANA: pokaż [Wykonana] [Odwołana] */}
+                                        {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                              disabled={loading}
+                                              className="text-green-600 hover:text-green-700"
+                                              title="Oznacz wizytę jako wykonana"
+                                            >
+                                              <CheckCircle className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                              disabled={loading}
+                                              className="text-red-600 hover:text-red-700"
+                                              title="Anuluj wizytę"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        )}
+                                        
+                                        {/* WYKONANA: pokaż [Cofnij] */}
+                                        {wizyta.status === 'wykonana' && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
                                             disabled={loading}
-                                            className="text-green-600 hover:text-green-700"
+                                            className="text-blue-600 hover:text-blue-700"
+                                            title="Cofnij do statusu zaplanowana"
                                           >
-                                            <CheckCircle className="h-4 w-4" />
+                                            <RotateCcw className="h-4 w-4" />
                                           </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
-                                            disabled={loading}
-                                            className="text-red-600 hover:text-red-700"
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      )}
+                                        )}
+                                        
+                                        {/* ODWOŁANA: pokaż [Wykonana] [Cofnij] */}
+                                        {wizyta.status === 'odwolana' && (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                              disabled={loading}
+                                              className="text-green-600 hover:text-green-700"
+                                              title="Pacjent jednak przyszedł - oznacz jako wykonana"
+                                            >
+                                              <CheckCircle className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
+                                              disabled={loading}
+                                              className="text-blue-600 hover:text-blue-700"
+                                              title="Cofnij do statusu zaplanowana"
+                                            >
+                                              <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        )}
+                                      </div>
                                       <div className="flex space-x-2">
                                         <Button
                                           variant="ghost"
