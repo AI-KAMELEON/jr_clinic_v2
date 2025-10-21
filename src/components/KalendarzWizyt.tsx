@@ -503,7 +503,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       if (fitsInWorkHours) {
         // Check if this slot conflicts with existing visits
         const hasConflict = wizytyNaDzien.some((wizyta) => {
-          const existingStart = wizyta.godzina_od || wizyta.godzina;
+          const existingStart = wizyta.godzina;
           const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
           
           // Check if new visit overlaps with existing visit
@@ -594,7 +594,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         // For longer visits, check if ALL required slots in the range are free
         const allSlotsInRange = generateSlotsInRange(timeStr, visitEndTime, 15);
         const conflictingVisit = wizytyNaDzien.find((wizyta) => {
-          const existingStart = wizyta.godzina_od || wizyta.godzina;
+          const existingStart = wizyta.godzina;
           const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
           
           // Check if any slot in the range overlaps with existing visit
@@ -740,11 +740,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         return false;
       }
 
-      const existingStart = wizyta.godzina_od || wizyta.godzina;
+      const existingStart = wizyta.godzina;
       const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
 
       // Check if new visit overlaps with existing visit
-      // Use godzina_od if available, otherwise use godzina
       const newStart = godzina;
       const overlaps = (newStart < existingEnd && visitEndTime > existingStart);
       
@@ -821,7 +820,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setSearchResults([]);
     
     // Determine visit duration based on existing times
-    const startTime = wizyta.godzina_od || wizyta.godzina;
+    const startTime = wizyta.godzina;
     const endTime = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
     const duration = calculateDuration(startTime, endTime);
     
@@ -947,7 +946,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         return false;
       }
       
-      const existingStart = wizyta.godzina_od || wizyta.godzina;
+      const existingStart = wizyta.godzina;
       const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
       
       // Check if visits overlap
@@ -1854,7 +1853,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                       <div className="flex items-center mb-2">
                                         <Clock className="mr-2 text-gray-500 flex-shrink-0 h-4 w-4" />
                                         <span className="font-medium text-sm">
-                                          {wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}
+                                          {wizyta.godzina.substring(0, 5)}
                                           {wizyta.godzina_do && (
                                             <span className="text-gray-500 ml-2">
                                               - {wizyta.godzina_do.substring(0, 5)}
@@ -2416,7 +2415,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           return false;
                         }
                         
-                        const existingStart = wizyta.godzina_od || wizyta.godzina;
+                        const existingStart = wizyta.godzina;
                         const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
                         const newEnd = times.godzina_do;
                         

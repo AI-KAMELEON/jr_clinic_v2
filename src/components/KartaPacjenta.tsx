@@ -30,6 +30,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { format } from "date-fns";
@@ -122,6 +132,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [edytujDane, setEdytujDane] = useState(false);
   const [nowaWizyta, setNowaWizyta] = useState(false);
   const [edytowanaWizyta, setEdytowanaWizyta] = useState<Wizyta | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
 
   // Get visit background color based on status
   const getVisitBackgroundColor = (status?: VisitStatus): string => {
@@ -316,18 +328,29 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   };
 
 
-  // Usuwanie wizyty
-  const handleUsunWizyte = async (id: string) => {
+  // Usuwanie wizyty - otwórz dialog potwierdzenia
+  const handleUsunWizyte = (id: string) => {
+    setWizytaToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  // Potwierdź usunięcie wizyty
+  const confirmDeleteWizyta = async () => {
+    if (!wizytaToDelete) return;
+    
     try {
       const { error } = await supabase
         .from('wizyty')
         .delete()
-        .eq('id', id);
+        .eq('id', wizytaToDelete);
 
       if (error) throw error;
 
-      const updatedWizyty = pacjent.wizyty.filter((w) => w.id !== id);
+      const updatedWizyty = pacjent.wizyty.filter((w) => w.id !== wizytaToDelete);
       setPacjent({ ...pacjent, wizyty: updatedWizyty });
+      
+      setDeleteDialogOpen(false);
+      setWizytaToDelete(null);
     } catch (error) {
       console.error('Error deleting visit:', error);
     }
@@ -730,6 +753,23 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć wizytę?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta akcja nie może zostać cofnięta. Wizyta zostanie trwale usunięta z historii pacjenta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteWizyta} className="bg-red-600 hover:bg-red-700">
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

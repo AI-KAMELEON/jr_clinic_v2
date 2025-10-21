@@ -18,6 +18,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search, Plus, Edit, Trash2, Filter } from "lucide-react";
@@ -57,6 +67,8 @@ const PacjenciPanel = ({
   const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pacjentToDelete, setPacjentToDelete] = useState<Pacjent | null>(null);
 
   // Fetch pacjenci from database
   const fetchPacjenci = async () => {
@@ -207,24 +219,31 @@ const PacjenciPanel = ({
     }
   };
 
-  const handleDeletePacjent = async (id: string) => {
-    if (window.confirm("Czy na pewno chcesz usunąć tego pacjenta?")) {
-      try {
-        setLoading(true);
-        const { error } = await supabase
-          .from("pacjenci")
-          .delete()
-          .eq("id", id);
+  const handleDeletePacjent = (pacjent: Pacjent) => {
+    setPacjentToDelete(pacjent);
+    setDeleteDialogOpen(true);
+  };
 
-        if (error) throw error;
+  const confirmDeletePacjent = async () => {
+    if (!pacjentToDelete) return;
+    
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from("pacjenci")
+        .delete()
+        .eq("id", pacjentToDelete.id);
 
-        setPacjenci(pacjenci.filter((p) => p.id !== id));
-      } catch (err) {
-        console.error("Error deleting pacjent:", err);
-        setError("Błąd podczas usuwania pacjenta");
-      } finally {
-        setLoading(false);
-      }
+      if (error) throw error;
+
+      setPacjenci(pacjenci.filter((p) => p.id !== pacjentToDelete.id));
+      setDeleteDialogOpen(false);
+      setPacjentToDelete(null);
+    } catch (err) {
+      console.error("Error deleting pacjent:", err);
+      setError("Błąd podczas usuwania pacjenta");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -513,7 +532,7 @@ const PacjenciPanel = ({
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeletePacjent(pacjent.id);
+                              handleDeletePacjent(pacjent);
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
@@ -697,6 +716,25 @@ const PacjenciPanel = ({
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć pacjenta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Czy na pewno chcesz usunąć pacjenta {pacjentToDelete?.imie} {pacjentToDelete?.nazwisko}?
+              <br />
+              Ta akcja nie może zostać cofnięta. Wszystkie dane pacjenta, w tym historia wizyt, zostaną trwale usunięte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePacjent} className="bg-red-600 hover:bg-red-700" disabled={loading}>
+              {loading ? "Usuwanie..." : "Usuń"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
