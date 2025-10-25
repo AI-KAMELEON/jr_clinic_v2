@@ -112,6 +112,9 @@
 - [2025-10-12] Dodano jasne komunikaty błędów dla duplikatów PESEL z informacją o istniejącym pacjencie
 - [2025-10-12] Zastąpiono standardowe alert() eleganckim AlertDialog w KartaPacjenta - wyskakujące okienko na środku ekranu
 - [2025-10-12] Zastąpiono banner error() eleganckim AlertDialog w PacjenciPanel - wyskakujące okienko na środku ekranu dla duplikatów PESEL
+- [2025-10-12] Poprawiono komunikaty w formularzu dodawania wizyt - precyzyjne alerty dla dni wolnych od pracy zamiast ogólnego "Ten termin nie jest dostępny"
+- [2025-10-12] Zastąpiono banner timeSlotWarning eleganckim AlertDialog w KalendarzWizyt - wyskakujące okienko na środku ekranu dla ostrzeżeń o terminach
+- [2025-10-12] Naprawiono funkcję handleSaveWizyta - zastąpiono wszystkie setError() AlertDialog dla dni wolnych od pracy i konfliktów terminów
 
 # Podsumowanie przed zakończeniem pracy
 

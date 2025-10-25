@@ -65,6 +65,15 @@ import {
 } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 interface WizytaWithPacjent extends Wizyta {
   pacjenci: Pacjent;
@@ -144,6 +153,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [customStartTime, setCustomStartTime] = useState<string>('08:00');
   const [customEndTime, setCustomEndTime] = useState<string>('09:00');
   const [timeSlotWarning, setTimeSlotWarning] = useState<string>('');
+  const [timeSlotWarningDialog, setTimeSlotWarningDialog] = useState(false);
+  const [timeSlotWarningMessage, setTimeSlotWarningMessage] = useState('');
 
   const [nowyUrlop, setNowyUrlop] = useState<Partial<UrlopInsert>>({
     data_od: format(new Date(), "yyyy-MM-dd"),
@@ -992,18 +1003,22 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         setError("❌ Nie można dodać wizyty w przeszłości");
       } else if (isVacationDay(nowaWizyta.data)) {
         console.log('❌ DEBUG - Dzień urlopowy');
-        setError("❌ Wybrany dzień jest dniem wolnym (urlop)");
+        setTimeSlotWarningMessage('⚠️ Wybrany dzień jest dniem wolnym (urlop)');
+        setTimeSlotWarningDialog(true);
       } else if (!isWorkingDay(nowaWizyta.data)) {
         console.log('❌ DEBUG - Nie dzień roboczy');
-        setError("❌ Wybrany dzień nie jest dniem roboczym");
+        setTimeSlotWarningMessage('⚠️ Wybrany dzień nie jest dniem roboczym');
+        setTimeSlotWarningDialog(true);
       } else if (!isWithinWorkingHours(nowaWizyta.data, nowaWizyta.godzina)) {
         console.log('❌ DEBUG - Poza godzinami pracy');
         const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
         const daySchedule = planPracy[dayName];
         if (daySchedule) {
-          setError(`❌ Godzina poza planem pracy (${daySchedule.godziny.od} - ${daySchedule.godziny.do})`);
+          setTimeSlotWarningMessage(`⚠️ Godzina poza planem pracy (${daySchedule.godziny.od} - ${daySchedule.godziny.do})`);
+          setTimeSlotWarningDialog(true);
         } else {
-          setError("❌ Godzina poza planem pracy");
+          setTimeSlotWarningMessage('⚠️ Godzina poza planem pracy');
+          setTimeSlotWarningDialog(true);
         }
       } else if (visitDuration === 'custom' && customDurationMinutes) {
         console.log('❌ DEBUG - Custom wizyta nie mieści się w planie pracy');
@@ -1014,16 +1029,20 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           const [endHour, endMin] = visitEndTime.split(':').map(Number);
           const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
           if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
-            setError(`❌ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+            setTimeSlotWarningMessage(`⚠️ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+            setTimeSlotWarningDialog(true);
           } else {
-            setError("❌ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami");
+            setTimeSlotWarningMessage('⚠️ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami');
+            setTimeSlotWarningDialog(true);
           }
         } else {
-          setError("❌ Wybrany termin nie jest dostępny");
+          setTimeSlotWarningMessage('⚠️ Wybrany termin nie jest dostępny');
+          setTimeSlotWarningDialog(true);
         }
       } else {
         console.log('❌ DEBUG - Ogólny błąd dostępności terminu');
-        setError("❌ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami");
+        setTimeSlotWarningMessage('⚠️ Wybrany termin nie jest dostępny - sprawdź konflikty z innymi wizytami');
+        setTimeSlotWarningDialog(true);
       }
       return;
     }
@@ -2398,40 +2417,63 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                   
                   // Check for conflicts and show warnings
                   if (nowaWizyta.data) {
-                    const isAvailable = isTimeSlotAvailable(
-                      nowaWizyta.data,
-                      value,
-                      selectedWizyta?.id,
-                      visitDuration,
-                      customStartTime,
-                      customEndTime,
-                      customDurationMinutes,
-                    );
-                    
-                    if (!isAvailable) {
-                      // Find conflicting visits (exclude cancelled visits)
-                      const conflictingVisits = wizyty.filter(wizyta => wizyta.status !== 'odwolana').filter(wizyta => {
-                        if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
-                          return false;
-                        }
-                        
-                        const existingStart = wizyta.godzina;
-                        const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
-                        const newEnd = times.godzina_do;
-                        
-                        return (value < existingEnd && newEnd > existingStart);
-                      });
-                      
-                      if (conflictingVisits.length > 0) {
-                        const conflict = conflictingVisits[0];
-                        const conflictStart = conflict.godzina_od || conflict.godzina;
-                        const conflictEnd = conflict.godzina_do || addMinutesToTime(conflict.godzina, 30);
-                        setTimeSlotWarning(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjent?.imie} ${conflict.pacjent?.nazwisko})`);
+                    // Najpierw sprawdź czy to dzień wolny od pracy
+                    if (isVacationDay(nowaWizyta.data)) {
+                      console.log('🔍 DEBUG - Ustawiam AlertDialog dla dnia urlopowego');
+                      setTimeSlotWarningMessage('⚠️ Wybrany dzień jest dniem wolnym (urlop)');
+                      setTimeSlotWarningDialog(true);
+                    } else if (!isWorkingDay(nowaWizyta.data)) {
+                      setTimeSlotWarningMessage('⚠️ Wybrany dzień nie jest dniem roboczym');
+                      setTimeSlotWarningDialog(true);
+                    } else if (!isWithinWorkingHours(nowaWizyta.data, value)) {
+                      const dayName = getDayName(new Date(nowaWizyta.data + "T00:00:00"));
+                      const daySchedule = planPracy[dayName];
+                      if (daySchedule) {
+                        setTimeSlotWarningMessage(`⚠️ Godzina poza planem pracy (${daySchedule.godziny.od} - ${daySchedule.godziny.do})`);
+                        setTimeSlotWarningDialog(true);
                       } else {
-                        setTimeSlotWarning('⚠️ Ten termin nie jest dostępny');
+                        setTimeSlotWarningMessage('⚠️ Godzina poza planem pracy');
+                        setTimeSlotWarningDialog(true);
                       }
                     } else {
-                      setTimeSlotWarning('');
+                      // Sprawdź konflikty z innymi wizytami
+                      const isAvailable = isTimeSlotAvailable(
+                        nowaWizyta.data,
+                        value,
+                        selectedWizyta?.id,
+                        visitDuration,
+                        customStartTime,
+                        customEndTime,
+                        customDurationMinutes,
+                      );
+                      
+                      if (!isAvailable) {
+                        // Find conflicting visits (exclude cancelled visits)
+                        const conflictingVisits = wizyty.filter(wizyta => wizyta.status !== 'odwolana').filter(wizyta => {
+                          if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+                            return false;
+                          }
+                          
+                          const existingStart = wizyta.godzina;
+                          const existingEnd = wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30);
+                          const newEnd = times.godzina_do;
+                          
+                          return (value < existingEnd && newEnd > existingStart);
+                        });
+                        
+                        if (conflictingVisits.length > 0) {
+                          const conflict = conflictingVisits[0];
+                          const conflictStart = conflict.godzina_od || conflict.godzina;
+                          const conflictEnd = conflict.godzina_do || addMinutesToTime(conflict.godzina, 30);
+                          setTimeSlotWarningMessage(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjent?.imie} ${conflict.pacjent?.nazwisko})`);
+                          setTimeSlotWarningDialog(true);
+                        } else {
+                          setTimeSlotWarningMessage('⚠️ Ten termin nie jest dostępny');
+                          setTimeSlotWarningDialog(true);
+                        }
+                      } else {
+                        setTimeSlotWarning('');
+                      }
                     }
                   }
                 }}
@@ -2565,7 +2607,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             const [endHour, endMin] = newEndTime.split(':').map(Number);
                             const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
                             if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
-                              setTimeSlotWarning(`⚠️ Wizyta ${minutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                              setTimeSlotWarningMessage(`⚠️ Wizyta ${minutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                              setTimeSlotWarningDialog(true);
                             } else {
                               setTimeSlotWarning('');
                             }
@@ -2608,7 +2651,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           const [endHour, endMin] = newEndTime.split(':').map(Number);
                           const [workEndHour, workEndMin] = daySchedule.godziny.do.split(':').map(Number);
                           if (endHour > workEndHour || (endHour === workEndHour && endMin > workEndMin)) {
-                            setTimeSlotWarning(`⚠️ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                            setTimeSlotWarningMessage(`⚠️ Wizyta ${customDurationMinutes} min nie mieści się w planie pracy (do ${daySchedule.godziny.do})`);
+                            setTimeSlotWarningDialog(true);
                           } else {
                             setTimeSlotWarning('');
                           }
@@ -3051,6 +3095,26 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {console.log('🔍 DEBUG - AlertDialog renderowany:', timeSlotWarningDialog, timeSlotWarningMessage)}
+      <AlertDialog open={timeSlotWarningDialog} onOpenChange={setTimeSlotWarningDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Termin niedostępny</AlertDialogTitle>
+            <AlertDialogDescription>
+              {timeSlotWarningMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => {
+              console.log('🔍 DEBUG - AlertDialog zamknięty');
+              setTimeSlotWarningDialog(false);
+            }}>
+              Rozumiem
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
