@@ -134,6 +134,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [edytowanaWizyta, setEdytowanaWizyta] = useState<Wizyta | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
+  const [duplicatePeselDialog, setDuplicatePeselDialog] = useState(false);
+  const [duplicatePeselMessage, setDuplicatePeselMessage] = useState('');
 
   // Get visit background color based on status
   const getVisitBackgroundColor = (status?: VisitStatus): string => {
@@ -208,6 +210,26 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
 
   const handleDaneSubmit = async () => {
     try {
+      // Sprawdź czy pacjent o takim PESEL już istnieje (ale nie ten sam pacjent)
+      if (formDane.pesel && !formDane.brakPesel) {
+        const { data: existingPatient, error: checkError } = await supabase
+          .from("pacjenci")
+          .select("id, imie, nazwisko")
+          .eq("pesel", formDane.pesel)
+          .neq("id", pacjentId) // Wyklucz aktualnie edytowanego pacjenta
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          throw checkError;
+        }
+        
+        if (existingPatient) {
+          setDuplicatePeselMessage(`Pacjent o numerze PESEL ${formDane.pesel} już istnieje w bazie danych (${existingPatient.imie} ${existingPatient.nazwisko})`);
+          setDuplicatePeselDialog(true);
+          return;
+        }
+      }
+      
       // Przygotuj dane do aktualizacji
       const updateData = {
         imie: formDane.imie,
@@ -228,7 +250,14 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
 
       if (error) {
         console.error('Error updating patient:', error);
-        alert('Błąd podczas zapisywania danych pacjenta');
+        
+        // Sprawdź czy to błąd duplikatu PESEL
+        if (error.code === '23505' && error.message.includes('idx_pacjenci_pesel_unique')) {
+          setDuplicatePeselMessage(`Pacjent o numerze PESEL ${formDane.pesel} już istnieje w bazie danych`);
+          setDuplicatePeselDialog(true);
+        } else {
+          alert('Błąd podczas zapisywania danych pacjenta');
+        }
         return;
       }
 
@@ -766,6 +795,22 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             <AlertDialogCancel>Anuluj</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteWizyta} className="bg-red-600 hover:bg-red-700">
               Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={duplicatePeselDialog} onOpenChange={setDuplicatePeselDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplikat PESEL</AlertDialogTitle>
+            <AlertDialogDescription>
+              {duplicatePeselMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setDuplicatePeselDialog(false)}>
+              Rozumiem
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

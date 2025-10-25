@@ -485,7 +485,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       visitDurationMinutes = duration === '15min' ? 15 : 30;
     }
     
-    // Generate base 15-minute slots
+    // Always generate 15-minute slots for better granularity
     let currentHour = startHour;
     let currentMin = startMin;
     
@@ -515,7 +515,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         }
       }
       
-      // Add 15 minutes
+      // Always add 15 minutes for granular slot generation
       currentMin += 15;
       if (currentMin >= 60) {
         currentMin = 0;

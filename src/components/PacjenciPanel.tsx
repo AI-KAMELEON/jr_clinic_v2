@@ -69,6 +69,8 @@ const PacjenciPanel = ({
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pacjentToDelete, setPacjentToDelete] = useState<Pacjent | null>(null);
+  const [duplicatePeselDialog, setDuplicatePeselDialog] = useState(false);
+  const [duplicatePeselMessage, setDuplicatePeselMessage] = useState('');
 
   // Fetch pacjenci from database
   const fetchPacjenci = async () => {
@@ -109,6 +111,25 @@ const PacjenciPanel = ({
     
     try {
       setLoading(true);
+      
+      // Sprawdź czy pacjent o takim PESEL już istnieje
+      if (pesel && !brakPesel) {
+        const { data: existingPatient, error: checkError } = await supabase
+          .from("pacjenci")
+          .select("id, imie, nazwisko")
+          .eq("pesel", pesel)
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          throw checkError;
+        }
+        
+        if (existingPatient) {
+          setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych (${existingPatient.imie} ${existingPatient.nazwisko})`);
+          setDuplicatePeselDialog(true);
+          return;
+        }
+      }
       
       // Przygotuj dane do wstawienia
       const insertData: any = {
@@ -165,7 +186,14 @@ const PacjenciPanel = ({
         brakPesel: brakPesel,
         notatki: formData.get("notatki")
       });
-      setError(`Błąd podczas dodawania pacjenta: ${err.message || err}`);
+      
+      // Sprawdź czy to błąd duplikatu PESEL
+      if (err.code === '23505' && err.message.includes('idx_pacjenci_pesel_unique')) {
+        setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych`);
+        setDuplicatePeselDialog(true);
+      } else {
+        setError(`Błąd podczas dodawania pacjenta: ${err.message || err}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -188,7 +216,28 @@ const PacjenciPanel = ({
     
     try {
       setLoading(true);
-          const { data, error } = await supabase
+      
+      // Sprawdź czy pacjent o takim PESEL już istnieje (ale nie ten sam pacjent)
+      if (pesel && !brakPesel) {
+        const { data: existingPatient, error: checkError } = await supabase
+          .from("pacjenci")
+          .select("id, imie, nazwisko")
+          .eq("pesel", pesel)
+          .neq("id", currentPacjent.id) // Wyklucz aktualnie edytowanego pacjenta
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          throw checkError;
+        }
+        
+        if (existingPatient) {
+          setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych (${existingPatient.imie} ${existingPatient.nazwisko})`);
+          setDuplicatePeselDialog(true);
+          return;
+        }
+      }
+      
+      const { data, error } = await supabase
             .from("pacjenci")
             .update({
               imie: formData.get("imie") as string,
@@ -213,7 +262,14 @@ const PacjenciPanel = ({
       setCurrentPacjent(null);
     } catch (err) {
       console.error("Error updating pacjent:", err);
-      setError("Błąd podczas aktualizacji pacjenta");
+      
+      // Sprawdź czy to błąd duplikatu PESEL
+      if (err.code === '23505' && err.message.includes('idx_pacjenci_pesel_unique')) {
+        setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych`);
+        setDuplicatePeselDialog(true);
+      } else {
+        setError(`Błąd podczas aktualizacji pacjenta: ${err.message || err}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -731,6 +787,22 @@ const PacjenciPanel = ({
             <AlertDialogCancel>Anuluj</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeletePacjent} className="bg-red-600 hover:bg-red-700" disabled={loading}>
               {loading ? "Usuwanie..." : "Usuń"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={duplicatePeselDialog} onOpenChange={setDuplicatePeselDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplikat PESEL</AlertDialogTitle>
+            <AlertDialogDescription>
+              {duplicatePeselMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setDuplicatePeselDialog(false)}>
+              Rozumiem
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

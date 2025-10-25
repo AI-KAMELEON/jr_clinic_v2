@@ -105,6 +105,13 @@
 - [2025-10-12] Dodano ikonę RotateCcw (cofnij) dla intuicyjnego przywracania do stanu początkowego
 - [2025-10-12] Naprawiono zapisywanie danych pacjenta w karcie pacjenta - zmiany są teraz zapisywane do bazy danych Supabase
 - [2025-10-12] Funkcja handleDaneSubmit teraz asynchronicznie zapisuje zmiany do bazy przed aktualizacją lokalnego stanu
+- [2025-10-12] Uruchomiono aplikację w trybie deweloperskim - serwer Vite działa na http://localhost:5173
+- [2025-10-12] Zaimplementowano sprawdzanie duplikatów PESEL w dodawaniu pacjentów - system sprawdza czy PESEL już istnieje przed dodaniem
+- [2025-10-12] Zaimplementowano sprawdzanie duplikatów PESEL w edycji pacjentów - system sprawdza czy nowy PESEL nie należy do innego pacjenta
+- [2025-10-12] Zaimplementowano sprawdzanie duplikatów PESEL w KartaPacjenta - zabezpieczenie przed duplikatami przy edycji danych pacjenta
+- [2025-10-12] Dodano jasne komunikaty błędów dla duplikatów PESEL z informacją o istniejącym pacjencie
+- [2025-10-12] Zastąpiono standardowe alert() eleganckim AlertDialog w KartaPacjenta - wyskakujące okienko na środku ekranu
+- [2025-10-12] Zastąpiono banner error() eleganckim AlertDialog w PacjenciPanel - wyskakujące okienko na środku ekranu dla duplikatów PESEL
 
 # Podsumowanie przed zakończeniem pracy
 
