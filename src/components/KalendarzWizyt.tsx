@@ -128,6 +128,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [tempPlanPracy, setTempPlanPracy] = useState<WorkSchedule>(planPracy);
 
   const [wizyty, setWizyty] = useState<WizytaWithPacjent[]>([]);
+  const [wizytyCache, setWizytyCache] = useState<Map<string, WizytaWithPacjent[]>>(new Map()); // Cache dla wizyt
   const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
   const [urlopy, setUrlopy] = useState<Urlop[]>([]);
   const [searchResults, setSearchResults] = useState<Pacjent[]>([]);
@@ -136,6 +137,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [selectedPacjent, setSelectedPacjent] = useState<Pacjent | null>(null);
   const [isSelectingPatient, setIsSelectingPatient] = useState(false);
   const [showPatientError, setShowPatientError] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string>("");
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
   const [nowaWizyta, setNowaWizyta] = useState<Partial<WizytaInsert>>({
     data: format(new Date(), "yyyy-MM-dd"),
@@ -316,9 +319,69 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     }
   };
 
-  // Fetch wizyty from database
-  const fetchWizyty = async () => {
+  // Funkcje pomocnicze dla widoków (muszą być przed fetchWizyty)
+  const getWeekDates = (date: Date) => {
+    const startOfWeek = new Date(date);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    startOfWeek.setDate(diff);
+    
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      weekDates.push(date);
+    }
+    return weekDates;
+  };
+
+  const getMonthDates = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Get first Monday of the month (or previous Monday if month doesn't start on Monday)
+    const startDate = new Date(firstDay);
+    const dayOfWeek = firstDay.getDay();
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startDate.setDate(firstDay.getDate() - daysToSubtract);
+    
+    const monthDates = [];
+    const currentDate = new Date(startDate);
+    
+    // Generate 42 days (6 weeks) to cover the month
+    for (let i = 0; i < 42; i++) {
+      monthDates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return monthDates;
+  };
+
+  // Fetch wizyty for a specific date range
+  const fetchWizytyForRange = async (startDate: string, endDate: string, cacheKey: string, forceRefresh: boolean = false) => {
     try {
+      // Sprawdź cache tylko jeśli nie wymuszamy odświeżenia
+      if (!forceRefresh && wizytyCache.has(cacheKey)) {
+        const cached = wizytyCache.get(cacheKey) || [];
+        // Użyj cache - zastąp wizyty dla tego zakresu
+        setWizyty(prev => {
+          const merged = new Map<string, WizytaWithPacjent>();
+          // Dodaj wizyty spoza tego zakresu
+          prev.forEach(w => {
+            const wDate = w.data;
+            if (wDate < startDate || wDate > endDate) {
+              merged.set(w.id, w);
+            }
+          });
+          // Dodaj wizyty z cache dla tego zakresu
+          cached.forEach(w => merged.set(w.id, w));
+          return Array.from(merged.values());
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from("wizyty")
         .select(
@@ -327,16 +390,113 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           pacjenci (*)
         `,
         )
+        .gte("data", startDate)
+        .lte("data", endDate)
         .order("data")
         .order("godzina");
 
       if (error) throw error;
-      console.log("Fetched wizyty:", data);
-      setWizyty(data || []);
+
+      // Zapisz w cache
+      setWizytyCache(prev => {
+        const newCache = new Map(prev);
+        newCache.set(cacheKey, data || []);
+        return newCache;
+      });
+
+      // Zaktualizuj wizyty - zastąp wizyty dla tego zakresu
+      setWizyty(prev => {
+        const merged = new Map<string, WizytaWithPacjent>();
+        // Dodaj wizyty spoza tego zakresu
+        prev.forEach(w => {
+          const wDate = w.data;
+          if (wDate < startDate || wDate > endDate) {
+            merged.set(w.id, w);
+          }
+        });
+        // Dodaj nowe wizyty dla tego zakresu
+        (data || []).forEach(w => merged.set(w.id, w));
+        return Array.from(merged.values());
+      });
     } catch (err) {
-      console.error("Error fetching wizyty:", err);
+      console.error("Error fetching wizyty for range:", err);
       setError("Błąd podczas pobierania wizyt");
     }
+  };
+
+  // Fetch wizyty based on current view
+  const fetchWizyty = async (forceRefresh: boolean = false) => {
+    if (!selectedDate) return;
+
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+    if (selectedView === "dzien") {
+      // Widok dzienny - pobierz tylko ten dzień
+      await fetchWizytyForRange(dateStr, dateStr, `day-${dateStr}`, forceRefresh);
+    } else if (selectedView === "tydzien") {
+      // Widok tygodniowy - pobierz cały tydzień
+      const weekDates = getWeekDates(selectedDate);
+      const startDate = format(weekDates[0], "yyyy-MM-dd");
+      const endDate = format(weekDates[6], "yyyy-MM-dd");
+      await fetchWizytyForRange(startDate, endDate, `week-${startDate}`, forceRefresh);
+    } else if (selectedView === "miesiac") {
+      // Widok miesięczny - pobierz cały miesiąc (42 dni dla kalendarza)
+      const monthDates = getMonthDates(selectedDate);
+      const startDate = format(monthDates[0], "yyyy-MM-dd");
+      const endDate = format(monthDates[monthDates.length - 1], "yyyy-MM-dd");
+      await fetchWizytyForRange(startDate, endDate, `month-${format(selectedDate, "yyyy-MM")}`, forceRefresh);
+    }
+  };
+
+  // Refresh wizyty for a specific date (used after save/update/delete)
+  const refreshWizytyForDate = async (date: string) => {
+    // Invalidate cache for this date and related ranges
+    setWizytyCache(prev => {
+      const newCache = new Map(prev);
+      // Remove cache entries that might contain this date
+      const keysToRemove: string[] = [];
+      newCache.forEach((_, key) => {
+        // Remove day cache for this date
+        if (key === `day-${date}`) {
+          keysToRemove.push(key);
+        }
+        // Remove week cache if date is in that week
+        if (key.startsWith(`week-`)) {
+          const weekStart = key.replace('week-', '');
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+          if (date >= weekStart && date <= weekEndStr) {
+            keysToRemove.push(key);
+          }
+        }
+        // Remove month cache if date is in that month
+        if (key.startsWith(`month-`)) {
+          const monthKey = key.replace('month-', '');
+          const [year, month] = monthKey.split('-');
+          const dateObj = new Date(date + "T00:00:00");
+          if (dateObj.getFullYear().toString() === year && (dateObj.getMonth() + 1).toString().padStart(2, '0') === month) {
+            keysToRemove.push(key);
+          }
+        }
+      });
+      keysToRemove.forEach(key => newCache.delete(key));
+      return newCache;
+    });
+    
+    // Re-fetch based on current view - WYMUŚ odświeżenie (pomiń cache)
+    await fetchWizyty(true);
+  };
+
+  // Funkcja pomocnicza do porównywania dat (niezawodna)
+  const isSameDate = (date1: string | Date, date2: string | Date): boolean => {
+    const d1 = typeof date1 === 'string' ? new Date(date1 + "T00:00:00") : date1;
+    const d2 = typeof date2 === 'string' ? new Date(date2 + "T00:00:00") : date2;
+    return (
+      d1.getDate() === d2.getDate() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getFullYear() === d2.getFullYear()
+    );
   };
 
   // Fetch urlopy from database
@@ -468,7 +628,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   // Generate working hours for a specific date based on work schedule
-  const generateWorkingHours = (date: string, duration: '15min' | '30min' | 'custom' = '30min', customMinutes?: number): string[] => {
+  const generateWorkingHours = (
+    date: string, 
+    duration: '15min' | '30min' | 'custom' = '30min', 
+    customMinutes?: number,
+    visitsForDate?: WizytaWithPacjent[] // Opcjonalny parametr z wizytami dla danej daty
+  ): string[] => {
     const dateObj = new Date(date + "T00:00:00");
     const dayName = getDayName(dateObj);
     const daySchedule = planPracy[dayName];
@@ -477,8 +642,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return [];
     }
 
-    // Get existing visits for this date (exclude cancelled visits)
-    const wizytyNaDzien = wizyty.filter((w) => w.data === date && w.status !== 'odwolana');
+    // Użyj przekazanych wizyt lub wizyt z state (exclude cancelled visits)
+    const wizytyNaDzien = visitsForDate 
+      ? visitsForDate.filter((w) => w.status !== 'odwolana')
+      : wizyty.filter((w) => isSameDate(w.data, date) && w.status !== 'odwolana');
     
     const hours: string[] = [];
     const startTime = daySchedule.godziny.od;
@@ -561,7 +728,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     }
 
     // Get existing visits for this date (exclude cancelled visits)
-    const wizytyNaDzien = wizyty.filter((w) => w.data === date && w.status !== 'odwolana');
+    const wizytyNaDzien = wizyty.filter((w) => isSameDate(w.data, date) && w.status !== 'odwolana');
     
     const slots: Array<{time: string, available: boolean, reason?: string}> = [];
     const startTime = daySchedule.godziny.od;
@@ -642,14 +809,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
   // Check if date is a working day
   const isWorkingDay = (date: string): boolean => {
+    if (!date || date.trim() === "") return false;
     const dateObj = new Date(date + "T00:00:00");
+    if (isNaN(dateObj.getTime())) return false;
     const dayName = getDayName(dateObj);
-    return planPracy[dayName].aktywny;
+    return planPracy[dayName]?.aktywny ?? false;
   };
 
   // Check if date is a vacation day
   const isVacationDay = (date: string): boolean => {
+    if (!date || date.trim() === "") return false;
     const dateObj = new Date(date + "T00:00:00");
+    if (isNaN(dateObj.getTime())) return false;
     return urlopy.some(urlop => {
       const startDate = new Date(urlop.data_od + "T00:00:00");
       const endDate = new Date(urlop.data_do + "T00:00:00");
@@ -694,7 +865,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
     const dateObj = new Date(date + "T00:00:00");
     const dayName = getDayName(dateObj);
-    const workingHours = planPracy[dayName].godziny;
+    const workingHours = planPracy[dayName]?.godziny;
+    
+    if (!workingHours) return false;
 
     const timeOnly = time.substring(0, 5); // Get HH:MM format
     return timeOnly >= workingHours.od && timeOnly <= workingHours.do;
@@ -711,12 +884,29 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     customMinutes?: number,
   ) => {
     // Check if date is available (working day and not vacation)
-    if (!isDateAvailable(data)) {
+    const dateAvailable = isDateAvailable(data);
+    if (!dateAvailable) {
+      console.log('❌ DEBUG - isTimeSlotAvailable: Data niedostępna', {
+        data,
+        isWorking: isWorkingDay(data),
+        isVacation: isVacationDay(data)
+      });
       return false;
     }
 
     // Check if it's within working hours
-    if (!isWithinWorkingHours(data, godzina)) {
+    const withinHours = isWithinWorkingHours(data, godzina);
+    if (!withinHours) {
+      const dateObj = new Date(data + "T00:00:00");
+      const dayName = getDayName(dateObj);
+      const workingHours = planPracy[dayName]?.godziny;
+      console.log('❌ DEBUG - isTimeSlotAvailable: Poza godzinami pracy', {
+        data,
+        godzina,
+        dayName,
+        workingHours,
+        timeOnly: godzina.substring(0, 5)
+      });
       return false;
     }
 
@@ -726,6 +916,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     const currentTime = format(now, "HH:mm:ss");
     
     if (data === todayStr && godzina <= currentTime) {
+      console.log('❌ DEBUG - isTimeSlotAvailable: Wizyta w przeszłości', {
+        data,
+        todayStr,
+        godzina,
+        currentTime
+      });
       return false;
     }
 
@@ -746,8 +942,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
     // Check for time conflicts with existing visits (exclude cancelled visits)
     const activeVisits = wizyty.filter(w => w.status !== 'odwolana');
-    const hasConflict = activeVisits.some((wizyta) => {
-      if (wizyta.data !== data || wizyta.id === excludeId) {
+    const visitsForDate = activeVisits.filter(w => isSameDate(w.data, data));
+    const hasConflict = visitsForDate.some((wizyta) => {
+      if (wizyta.id === excludeId) {
         return false;
       }
 
@@ -777,6 +974,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       godzina,
       visitEndTime,
       activeVisitsCount: activeVisits.length,
+      visitsForDateCount: visitsForDate.length,
       hasConflict,
       result: !hasConflict
     });
@@ -786,10 +984,17 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
   useEffect(() => {
     fetchPacjenci();
-    fetchWizyty();
     fetchUrlopy();
     fetchPlanPracy();
   }, []);
+
+  // Fetch wizyty when view or date changes
+  useEffect(() => {
+    if (selectedDate) {
+      fetchWizyty();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedView, selectedDate]);
 
   const handleAddWizyta = () => {
     setSelectedWizyta(null);
@@ -880,7 +1085,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
       if (error) throw error;
 
-      await fetchWizyty();
+      // Refresh wizyty for the date of updated visit
+      if (wizyta.data) {
+        await refreshWizytyForDate(wizyta.data);
+      } else {
+        await fetchWizyty();
+      }
     } catch (err) {
       console.error("Error updating visit status:", err);
       setError("Błąd podczas aktualizacji statusu wizyty");
@@ -901,7 +1111,17 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
       if (error) throw error;
 
-      await fetchWizyty();
+      // Refresh wizyty for the date of deleted visit
+      if (selectedWizyta?.data) {
+        await refreshWizytyForDate(selectedWizyta.data);
+      } else {
+        await fetchWizyty();
+      }
+      
+      // Pokaż komunikat sukcesu
+      setSuccessMessage("Wizyta została usunięta pomyślnie!");
+      setShowSuccessDialog(true);
+      
       setIsDeleteDialogOpen(false);
       setSelectedWizyta(null);
     } catch (err) {
@@ -953,7 +1173,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     const newEnd = nowaWizyta.godzina_do || addMinutesToTime(nowaWizyta.godzina, 30);
     
     const hasOverlap = wizyty.filter(w => w.status !== 'odwolana').some((wizyta) => {
-      if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+      // Użyj porównania dat zamiast stringów
+      if (!isSameDate(wizyta.data, nowaWizyta.data) || wizyta.id === selectedWizyta?.id) {
         return false;
       }
       
@@ -988,7 +1209,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       visitDuration,
       isSlotAvailable,
       hasOverlap,
-      wizytyNaDzien: wizyty.filter(w => w.data === nowaWizyta.data && w.status !== 'odwolana').length
+      wizytyNaDzien: wizyty.filter(w => isSameDate(w.data, nowaWizyta.data) && w.status !== 'odwolana').length
     });
     
     if (!isSlotAvailable) {
@@ -998,7 +1219,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const todayStr = format(now, "yyyy-MM-dd");
       const currentTime = format(now, "HH:mm:ss");
       
-      if (nowaWizyta.data === todayStr && nowaWizyta.godzina <= currentTime) {
+      if (isSameDate(nowaWizyta.data, todayStr) && nowaWizyta.godzina <= currentTime) {
         console.log('❌ DEBUG - Wizyta w przeszłości');
         setError("❌ Nie można dodać wizyty w przeszłości");
       } else if (isVacationDay(nowaWizyta.data)) {
@@ -1086,7 +1307,17 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       }
 
       console.log('✅ DEBUG - Wizyta zapisana pomyślnie');
-      await fetchWizyty();
+      // Refresh wizyty for the date of saved visit
+      if (nowaWizyta.data) {
+        await refreshWizytyForDate(nowaWizyta.data);
+      } else {
+        await fetchWizyty();
+      }
+      
+      // Pokaż komunikat sukcesu
+      setSuccessMessage(selectedWizyta ? "Wizyta została zaktualizowana pomyślnie!" : "Wizyta została dodana pomyślnie!");
+      setShowSuccessDialog(true);
+      
       setIsDialogOpen(false);
       // Wyczyść formularz po zapisaniu
       setNowaWizyta({
@@ -1126,50 +1357,19 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     })
     .sort((a, b) => a.godzina.localeCompare(b.godzina));
 
-  // Funkcje pomocnicze dla widoków
-  const getWeekDates = (date: Date) => {
-    const startOfWeek = new Date(date);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Monday start
-    startOfWeek.setDate(diff);
-    
-    const weekDates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      weekDates.push(date);
-    }
-    return weekDates;
-  };
-
-  const getMonthDates = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    // Get first Monday of the month (or previous Monday if month doesn't start on Monday)
-    const startDate = new Date(firstDay);
-    const dayOfWeek = firstDay.getDay();
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    startDate.setDate(firstDay.getDate() - daysToSubtract);
-    
-    const monthDates = [];
-    const currentDate = new Date(startDate);
-    
-    // Generate 42 days (6 weeks) to cover the month
-    for (let i = 0; i < 42; i++) {
-      monthDates.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return monthDates;
-  };
+  // Funkcje pomocnicze dla widoków (zdefiniowane wcześniej, przed fetchWizyty)
 
   const getWizytyForDate = (date: Date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
     return wizyty
-      .filter((wizyta) => wizyta.data === dateStr)
+      .filter((wizyta) => {
+        // Użyj tej samej logiki co wizytyNaDzien (która działa!)
+        const wizytaDate = new Date(wizyta.data + "T00:00:00");
+        return (
+          wizytaDate.getDate() === date.getDate() &&
+          wizytaDate.getMonth() === date.getMonth() &&
+          wizytaDate.getFullYear() === date.getFullYear()
+        );
+      })
       .sort((a, b) => a.godzina.localeCompare(b.godzina));
   };
 
@@ -1236,6 +1436,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       console.error('Error fetching note for print:', err);
     }
     
+    // Debug: sprawdź dane wizyt przed drukowaniem
+    console.log('🔍 DEBUG - Wizyty do druku:', wizytyNaDzien.map(w => ({
+      pacjent: `${w.pacjenci?.imie} ${w.pacjenci?.nazwisko}`,
+      telefon: w.pacjenci?.telefon,
+      hasTelefon: !!w.pacjenci?.telefon,
+      pacjenci: w.pacjenci
+    })));
+    
     // Przygotuj zawartość do wydruku
     const printContent = `
       <!DOCTYPE html>
@@ -1265,22 +1473,34 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             }
             .visit-item {
               display: flex;
-              justify-content: space-between;
-              align-items: center;
+              flex-direction: column;
               padding: 10px 0;
               border-bottom: 1px solid #eee;
             }
             .visit-time {
               font-weight: bold;
-              min-width: 80px;
+              margin-bottom: 8px;
             }
             .visit-patient {
               flex: 1;
+            }
+            .visit-patient-name {
+              display: flex;
+              align-items: center;
+              margin-bottom: 4px;
+            }
+            .visit-patient-name-text {
+              font-weight: 500;
+            }
+            .visit-phone {
+              color: #666;
+              font-size: 14px;
               margin-left: 20px;
             }
             .visit-type {
               color: #666;
               font-size: 14px;
+              margin-bottom: 4px;
             }
             .visit-notes {
               color: #333;
@@ -1347,17 +1567,16 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           ${wizytyNaDzien.length > 0 ? 
             wizytyNaDzien.map(wizyta => `
               <div class="visit-item">
-                <div class="visit-time">${wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)} - ${wizyta.godzina_do ? wizyta.godzina_do.substring(0, 5) : ''}</div>
+                <div class="visit-time">${wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}${wizyta.godzina_do ? '-' + wizyta.godzina_do.substring(0, 5) : ''}</div>
                 <div class="visit-patient">
-                  <div>${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</div>
+                  <div class="visit-patient-name">
+                    <span class="visit-patient-name-text">${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</span>
+                    ${wizyta.pacjenci.telefon && wizyta.pacjenci.telefon.trim() ? `<span class="visit-phone">tel: ${wizyta.pacjenci.telefon}</span>` : ''}
+                  </div>
                   <div class="visit-type">${wizyta.rodzaj}</div>
                   ${wizyta.notatki ? `
                     <div class="visit-notes">+ ${wizyta.notatki}</div>
                   ` : ''}
-                </div>
-                <div class="visit-status status-${wizyta.status || 'zaplanowana'}">
-                  ${wizyta.status === 'zaplanowana' || !wizyta.status ? 'Zaplanowana' : 
-                    wizyta.status === 'wykonana' ? 'Wykonana' : 'Odwołana'}
                 </div>
               </div>
             `).join('') : 
@@ -1555,11 +1774,35 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       // Użyj overrideDuration jeśli podano, w przeciwnym razie użyj state
       const activeDuration = overrideDuration || slotDuration;
 
+      // Pobierz wizyty dla zakresu dat (startDate do startDate + maxDaysToCheck dni)
+      const endSearchDate = new Date(startDate);
+      endSearchDate.setDate(endSearchDate.getDate() + maxDaysToCheck);
+      const startDateStr = format(startDate, "yyyy-MM-dd");
+      const endDateStr = format(endSearchDate, "yyyy-MM-dd");
+      
+      const { data: allVisits, error: visitsError } = await supabase
+        .from("wizyty")
+        .select(`*, pacjenci (*)`)
+        .gte("data", startDateStr)
+        .lte("data", endDateStr)
+        .neq("status", "odwolana")
+        .order("data")
+        .order("godzina");
+      
+      if (visitsError) throw visitsError;
+      
+      // Konwertuj na format WizytaWithPacjent
+      const allVisitsFormatted: WizytaWithPacjent[] = (allVisits || []).map(v => ({
+        ...v,
+        pacjenci: v.pacjenci as Pacjent
+      }));
+
       while (slots.length < limit && daysChecked < maxDaysToCheck) {
         const dataStr = format(currentDate, "yyyy-MM-dd");
         if (isDateAvailable(dataStr)) {
-          const wizytyNaDzien = wizyty.filter((w) => w.data === dataStr && w.status !== 'odwolana');
-          const workingHours = generateWorkingHours(dataStr, activeDuration);
+          // Użyj wizyt pobranych z bazy dla tego dnia
+          const wizytyNaDzien = allVisitsFormatted.filter((w) => isSameDate(w.data, dataStr));
+          const workingHours = generateWorkingHours(dataStr, activeDuration, undefined, wizytyNaDzien);
           
           let wolneGodziny = workingHours;
 
@@ -1816,7 +2059,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 <TabsContent value="dzien" className="mt-0 h-[calc(100vh-280px)]">
                   <div className="flex flex-col h-full">
                     <div className="flex-shrink-0 text-center">
-                      {isVacationDay(selectedDateStr) ? (
+                      {!selectedDate ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                          <h3 className="text-sm font-medium text-gray-600">
+                            Wybierz datę
+                          </h3>
+                          <p className="text-xs text-gray-500">Wybierz dzień z kalendarza</p>
+                        </div>
+                      ) : isVacationDay(selectedDateStr) ? (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-2">
                           <h3 className="text-sm font-medium text-red-600">
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
@@ -1829,7 +2079,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
                           <p className="text-xs text-green-600">
-                            Godziny pracy: {planPracy[getDayName(selectedDate)].godziny.od} - {planPracy[getDayName(selectedDate)].godziny.do}
+                            Godziny pracy: {planPracy[getDayName(selectedDate)]?.godziny?.od || 'N/A'} - {planPracy[getDayName(selectedDate)]?.godziny?.do || 'N/A'}
                           </p>
                         </div>
                       ) : (
@@ -2160,7 +2410,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       {monthDates.map((date, index) => {
                         const dayWizyty = getWizytyForDate(date);
                         const isToday = format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
-                        const isCurrentMonth = date.getMonth() === (selectedDate?.getMonth() || new Date().getMonth());
+                        // Określ wyświetlany miesiąc na podstawie środkowego dnia z monthDates (zawsze należy do wyświetlanego miesiąca)
+                        const middleDate = monthDates.length > 0 ? monthDates[Math.floor(monthDates.length / 2)] : new Date();
+                        const isCurrentMonth = date.getMonth() === middleDate.getMonth() && date.getFullYear() === middleDate.getFullYear();
                         const isSelected = selectedDate && format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
                         const isVacation = isVacationDay(format(date, "yyyy-MM-dd"));
                         const isWorking = isWorkingDay(format(date, "yyyy-MM-dd"));
@@ -2172,10 +2424,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                               isVacation ? "bg-red-50 border-red-200" :
                               isToday ? "bg-blue-50 border-blue-200" : 
                               isSelected ? "bg-gray-50 border-gray-300" : 
-                              isCurrentMonth && isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : 
-                              isCurrentMonth ? "bg-gray-100 border-gray-200" :
-                              "bg-gray-50 border-gray-100 text-gray-400"
-                            }`}
+                              isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : 
+                              "bg-gray-100 border-gray-200"
+                            } ${!isCurrentMonth ? "opacity-60" : ""}`}
                             onClick={() => {
                               setSelectedDate(date);
                               setSelectedView("dzien");
@@ -2450,7 +2701,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       if (!isAvailable) {
                         // Find conflicting visits (exclude cancelled visits)
                         const conflictingVisits = wizyty.filter(wizyta => wizyta.status !== 'odwolana').filter(wizyta => {
-                          if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+                          if (!isSameDate(wizyta.data, nowaWizyta.data) || wizyta.id === selectedWizyta?.id) {
                             return false;
                           }
                           
@@ -2502,7 +2753,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                     return allSlots.map((slot) => {
                       const todayStr = format(new Date(), "yyyy-MM-dd");
                       const currentTime = format(new Date(), "HH:mm:ss");
-                      const isPast = nowaWizyta.data === todayStr && slot.time <= currentTime;
+                      const isPast = isSameDate(nowaWizyta.data, todayStr) && slot.time <= currentTime;
                       const isVacation = isVacationDay(nowaWizyta.data);
                       const isWorking = isWorkingDay(nowaWizyta.data);
                       
@@ -3111,6 +3362,26 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
               setTimeSlotWarningDialog(false);
             }}>
               Rozumiem
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog dla sukcesu */}
+      <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Sukces
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {successMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowSuccessDialog(false)}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

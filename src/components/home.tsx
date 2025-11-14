@@ -131,22 +131,34 @@ const Home = () => {
             }
             .visit-item {
               display: flex;
-              justify-content: space-between;
-              align-items: center;
+              flex-direction: column;
               padding: 10px 0;
               border-bottom: 1px solid #eee;
             }
             .visit-time {
               font-weight: bold;
-              min-width: 60px;
+              margin-bottom: 8px;
             }
             .visit-patient {
               flex: 1;
+            }
+            .visit-patient-name {
+              display: flex;
+              align-items: center;
+              margin-bottom: 4px;
+            }
+            .visit-patient-name-text {
+              font-weight: 500;
+            }
+            .visit-phone {
+              color: #666;
+              font-size: 14px;
               margin-left: 20px;
             }
             .visit-type {
               color: #666;
               font-size: 14px;
+              margin-bottom: 4px;
             }
             .visit-notes {
               color: #333;
@@ -213,17 +225,16 @@ const Home = () => {
           ${dashboardData.todayAppointments.length > 0 ? 
             dashboardData.todayAppointments.map(appointment => `
               <div class="visit-item">
-                <div class="visit-time">${appointment.time}</div>
+                <div class="visit-time">${appointment.timeStart}${appointment.timeEnd ? '-' + appointment.timeEnd : ''}</div>
                 <div class="visit-patient">
-                  <div>${appointment.patientName}</div>
+                  <div class="visit-patient-name">
+                    <span class="visit-patient-name-text">${appointment.patientName}</span>
+                    ${appointment.patientPhone && appointment.patientPhone.trim() ? `<span class="visit-phone">tel: ${appointment.patientPhone}</span>` : ''}
+                  </div>
                   <div class="visit-type">${appointment.type}</div>
                   ${appointment.notes ? `
                     <div class="visit-notes">+ ${appointment.notes}</div>
                   ` : ''}
-                </div>
-                <div class="visit-status status-${appointment.status}">
-                  ${appointment.status === 'zaplanowana' ? 'Zaplanowana' : 
-                    appointment.status === 'wykonana' ? 'Wykonana' : 'Odwołana'}
                 </div>
               </div>
             `).join('') : 
@@ -284,10 +295,12 @@ const Home = () => {
           id,
           data,
           godzina,
+          godzina_od,
+          godzina_do,
           rodzaj,
           status,
           notatki,
-          pacjenci!inner(imie, nazwisko, id)
+          pacjenci!inner(imie, nazwisko, id, telefon)
         `)
         .eq("data", today)
         .order("godzina");
@@ -314,7 +327,10 @@ const Home = () => {
       const formattedTodayAppointments = todayVisits?.map(visit => ({
         id: visit.id,
         time: visit.godzina.substring(0, 5),
+        timeStart: visit.godzina_od ? visit.godzina_od.substring(0, 5) : visit.godzina.substring(0, 5),
+        timeEnd: visit.godzina_do ? visit.godzina_do.substring(0, 5) : '',
         patientName: `${visit.pacjenci.imie} ${visit.pacjenci.nazwisko}`,
+        patientPhone: visit.pacjenci.telefon || '',
         type: visit.rodzaj,
         patientId: visit.pacjenci.id,
         status: visit.status || 'zaplanowana',
