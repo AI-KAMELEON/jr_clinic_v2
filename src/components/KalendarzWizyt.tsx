@@ -2118,7 +2118,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {wizytyNaDzien.map((wizyta) => (
                               <Card
                                 key={wizyta.id}
-                                className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
+                                className={`border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)}`}
                                 onClick={() => handleWizytaClick(wizyta)}
                                 title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
                               >
@@ -2163,7 +2163,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana' as VisitStatus)}
                                               disabled={loading}
                                               className="text-green-600 hover:text-green-700"
                                               title="Oznacz wizytę jako wykonana"
@@ -2173,7 +2173,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana' as VisitStatus)}
                                               disabled={loading}
                                               className="text-red-600 hover:text-red-700"
                                               title="Anuluj wizytę"
@@ -2188,7 +2188,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
+                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana' as VisitStatus)}
                                             disabled={loading}
                                             className="text-blue-600 hover:text-blue-700"
                                             title="Cofnij do statusu zaplanowana"
@@ -2724,7 +2724,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           const conflict = conflictingVisits[0];
                           const conflictStart = conflict.godzina_od || conflict.godzina;
                           const conflictEnd = conflict.godzina_do || addMinutesToTime(conflict.godzina, 30);
-                          setTimeSlotWarningMessage(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjent?.imie} ${conflict.pacjent?.nazwisko})`);
+                          setTimeSlotWarningMessage(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjenci?.imie} ${conflict.pacjenci?.nazwisko})`);
                           setTimeSlotWarningDialog(true);
                         } else {
                           setTimeSlotWarningMessage('⚠️ Ten termin nie jest dostępny');
