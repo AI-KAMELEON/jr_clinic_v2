@@ -91,6 +91,12 @@ interface GodzinyPracy {
 
 // Use WorkSchedule type from supabase.ts instead of local interface
 
+// Tablica z polskimi nazwami miesięcy w mianowniku (bez odmian)
+const polskieMiesiace = [
+  "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
+  "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"
+];
+
 const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date(),
@@ -2368,7 +2374,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-medium">
-                        {selectedDate ? format(selectedDate, "MMMM yyyy", { locale: pl }) : "Wybierz datę"}
+                        {selectedDate 
+                          ? `${polskieMiesiace[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                          : "Wybierz datę"}
                       </h3>
                       <div className="flex items-center gap-2">
                         <Button

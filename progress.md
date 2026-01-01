@@ -136,6 +136,11 @@
 
 # Podsumowanie przed zakończeniem pracy
 
+- [2025-11-14] Naprawiono krytyczny błąd RangeError: Invalid time value w kalendarzu wizyt - dodano warunkowe sprawdzenie selectedDate przed użyciem funkcji format() i getDayName(), co eliminuje błędy przy przełączaniu dni w kalendarzu
+- [2025-11-14] Zaktualizowano funkcje isWorkingDay i isVacationDay - dodano walidację pustych/nieprawidłowych dat, funkcje zwracają false zamiast rzucać błędy, co zapewnia stabilność aplikacji
+- [2025-11-14] Dodano zabezpieczenie przed użyciem undefined selectedDate w JSX - wyświetlany jest komunikat "Wybierz datę" gdy selectedDate jest undefined, co poprawia UX i zapobiega błędom renderowania
+- [2025-11-14] System kalendarza wizyt działa stabilnie - wszystkie funkcje (wyświetlanie, dodawanie, edycja, usuwanie wizyt) działają poprawnie bez błędów w konsoli
+- [2025-11-14] Zaktualizowano progress.md z poprawną datą wykonania wszystkich zmian (2025-11-14) - dokumentacja jest teraz spójna i aktualna
 - [2024-12-19] Analiza ujawniła zaawansowany system zarządzania pacjentami i wizytami z pełną integracją Supabase
 - [2024-12-19] System ma solidną architekturę i intuicyjny UX, ale wymaga dodania autoryzacji
 - [2025-10-08] Przeprowadzono kompleksową optymalizację kalendarza wizyt - ujednolicono rozmiary, dodano automatyczne przełączanie widoków
