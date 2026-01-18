@@ -228,26 +228,6 @@ const MessagesPage: React.FC = () => {
         throw new Error("Brak aktywnej sesji użytkownika – zaloguj się ponownie.");
       }
 
-      console.log('🔍 DEBUG - Próba wysłania SMS:');
-      console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
-      console.log('Full URL:', `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-admin-sms`);
-      console.log('Expected URL:', 'https://wxzhzanagvxsiazrekia.supabase.co/functions/v1/send-admin-sms');
-      console.log('Data:', smsForm.date);
-      console.log('Type:', smsForm.type);
-      console.log('CustomText:', smsForm.customText);
-      console.log('Session token length:', session.access_token?.length);
-
-      // Test bezpośredniego połączenia
-      console.log('🔍 DEBUG - Testowanie połączenia...');
-      try {
-        const testResponse = await fetch('https://wxzhzanagvxsiazrekia.supabase.co/functions/v1/send-admin-sms', {
-          method: 'OPTIONS'
-        });
-        console.log('🔍 DEBUG - OPTIONS test status:', testResponse.status);
-      } catch (testError) {
-        console.log('🔍 DEBUG - OPTIONS test error:', testError);
-      }
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-admin-sms`,
         {
@@ -264,18 +244,12 @@ const MessagesPage: React.FC = () => {
         }
       );
 
-      console.log('🔍 DEBUG - Response status:', response.status);
-      console.log('🔍 DEBUG - Response ok:', response.ok);
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.log('🔍 DEBUG - Error response:', errorData);
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('🔍 DEBUG - Success result:', result);
-      
       setSuccess(`SMS wysłane pomyślnie! Wysłano: ${result.sent}, Błędów: ${result.failed}`);
       
       // Wyczyść formularz

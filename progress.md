@@ -1,5 +1,34 @@
-# Postępy
+## Postępy
 
+**WAŻNE**: Data w nawiasach kwadratowych [RRRR-MM-DD] oznacza datę wykonania zadania zgodnie z aktualnym czasem systemowym.
+
+- [2026-01-17] Przełączono MCP na źródło prawdy `schedule_slots`: dostępne terminy są teraz liczone na podstawie 15-minutowych slotów z grupowaniem w dłuższe wizyty.
+- [2026-01-17] Zmieniono rezerwację wizyt w MCP: rezerwacja blokuje ciągłe sloty i tworzy wpis w `wizyty`, a anulowanie zwalnia sloty.
+- [2026-01-17] Rozszerzono narzędzia agenta o `duration_minutes` i opcjonalny `rodzaj` dla rezerwacji i przełożenia wizyt.
+- [2026-01-17] Zaktualizowano generator slotów tak, aby usuwał wyłącznie wolne sloty, nie naruszając już zarezerwowanych terminów.
+- [2026-01-17] Dodano Edge Function `manage-appointments` i spięto UI kalendarza z rezerwacją slotów w `schedule_slots`.
+- [2026-01-17] Naprawiono mapowanie dni tygodnia w `generate-slots` (EN→PL), aby generator tworzył sloty zgodnie z `plany_pracy`.
+- [2026-01-17] Dodano fallback w `generate-slots` gdy tabela `urlopy` nie ma kolumny `resource_id` (bezpieczne pobieranie urlopów).
+- [2026-01-17] Zmieniono zapis slotów w `generate-slots` z `upsert` na `insert`, aby uniknąć błędu braku constraint.
+- [2026-01-17] Poprawiono `resource_id` w `generate-slots` na `null` zamiast `"default"` (kolumna typu UUID).
+- [2026-01-17] Zabezpieczono pobieranie wizyt w `KalendarzWizyt` przez `pacjenci!inner(*)`, aby nie renderować wizyt bez pacjenta.
+- [2025-11-20] Zaktualizowano Edge Function `generate-slots`: teraz pobiera istniejące wizyty i weryfikuje kolizje przy generowaniu slotów. Funkcja generuje automatycznie zarówno sloty 15-minutowe, jak i 30-minutowe dla każdego dostępnego terminu, co pozwala agentowi AI łatwo filtrować po `slot_unit_minutes` bez dodatkowej logiki.
+- [2025-11-20] Zaktualizowano dokumentację `VOICE_AGENT_SLOTS.md` o nowy model podwójnych slotów (15/30 min) i przykłady zapytań dla agenta.
+- [2025-11-13] Utworzono tabelę `schedule_slots` z indeksami, triggerem aktualizującym `updated_at`, oraz politykami RLS (pełny dostęp `service_role`, tylko odczyt `authenticated`) dla obsługi 15-min slotów.
+- [2025-11-13] Wdrożono Edge Function `generate-slots` (deploy przez MCP) generującą wolne sloty na podstawie `plany_pracy`, `urlopy` i istniejących wizyt; dodano obsługę polskich nazw dni i filtr kolizji.
+- [2025-11-13] Skonfigurowano wywołania cykliczne (Supabase Schedule + instrukcja n8n) z obejściem ograniczeń templatingu oraz ręczną weryfikacją logów.
+- [2025-11-13] Nadano brakujące uprawnienia `service_role` do `plany_pracy` i `urlopy`, wykonano testy generowania slotów z Service Role Key.
+- [2025-11-13] Opracowano workflow n8n: listowanie slotów (`order=slot_date.asc,slot_start.asc`), rezerwacja wielu slotów z rollbackiem, anulowanie oraz kontrakt danych z voice agentem (`slot_id`, `patient_id`, `duration`).
+- [2025-11-09] Wdrożono i przetestowano MCP Server w Supabase - funkcja działa poprawnie z ANON_KEY, wszystkie 8 narzędzi dostępnych przez HTTP endpoint. Zaimplementowano pełny protokół MCP w wrapper script (`scripts/mcp-server-wrapper.js`) z obsługą initialize/initialized. Skonfigurowano Cursor MCP client (`~/.cursor/mcp.json`) - serwer `clinic-voice-agent` gotowy do użycia lokalnie przez Cursor. Dodano debug logging do mcp-server dla diagnozy problemów z Retell AI (401 Unauthorized). Dodano obsługę metod `initialize` i `notifications/initialized` w mcp-server/index.ts - pełny handshake MCP zgodny z protokołem 2025-06-18. Naprawiono walidację MCP requestów - notyfikacje (bez pola `id`) są teraz poprawnie obsługiwane zgodnie ze specyfikacją JSON-RPC 2.0. Retell AI może teraz wykonać pełny handshake i pobrać listę narzędzi. Ulepszona funkcja `get_available_slots` - domyślnie zwraca 10 najbliższych terminów od dzisiaj (bez podawania daty), opcjonalnie można zapytać o konkretny dzień. Dodano parametr `limit` i pole `date` w odpowiedzi dla każdego slotu.
+- [2025-11-09] Zaprojektowano system próśb o oddzwonienie: dodano migrację `callback_requests` z krótkim powodem rozmowy (`reason`), dłuższą notatką i workflow (status, priorytet, rollover). Zaktualizowano typy Supabase i sanitizację parametrów. Udostępniono nowe narzędzie MCP `add_callback_request` z walidacją numeru telefonu, daty i obowiązkowym powodem rozmowy, dzięki czemu agent głosowy przekazuje administratorom jasną informację w jakiej sprawie oddzwonić.
+- [2025-11-09] Dodano widżet `CallbackRequestsWidget` w panelu głównym: dashboard pokazuje teraz obok notatki dziennej listę próśb `callback_requests` z priorytetami, statusem i krótkim powodem rozmowy. Administratorzy widzą zgłoszenia Voice AI bezpośrednio na starcie.
+- [2025-11-12] Uproszczono odpowiedź Supabase Edge Function `mcp-server` dla Retell AI – pole `result` zawiera teraz tylko dane z narzędzia (np. `{ success, patient_id, name }`), przy zachowaniu pełnej ramki JSON-RPC (`jsonrpc`, `id`). Weryfikacja pacjenta zwraca wyłącznie imię, a funkcja pozostaje zgodna z MCP.
+- [2025-11-07] Zaimplementowano uniwersalny MCP Server jako Supabase Edge Function (`mcp-server`) - centralny interfejs dla wszystkich narzędzi agenta głosowego zgodny z protokołem Model Context Protocol. Serwer udostępnia 8 narzędzi (verify_patient, get_available_slots, get_patient_appointments, book_appointment, cancel_appointment, add_note, update_note, reschedule_appointment) i może być używany przez Retell AI, ElevenLabs i Cursor MCP. Zmodyfikowano `elevenlabs-webhook` aby używał MCP Server jako backend dla function_call (architektura proxy). Utworzono dokumentację integracji Retell AI (`RETELL_AI_INTEGRATION.md`).
+- [2025-11-07] Usunięto lokalnie 4 nieużywane Edge Functions: `create-elevenlabs-agent`, `assign-twilio-phone`, `get-elevenlabs-voices`, `elevenlabs-personalization`. Utworzono kompleksową migrację SQL (`20251107130000_comprehensive_cleanup.sql`) z optymalizacją indeksów i dokumentacją deprecated kolumn w `agent_config`.
+- [2025-11-07] Przeprowadzono kompleksową analizę Supabase przez MCP - przeanalizowano 11 Edge Functions i 14 tabel, zidentyfikowano problemy i utworzono raport optymalizacji (`SUPABASE_OPTIMIZATION_REPORT.md`). Zastosowano migrację optymalizacyjną: usunięto zduplikowany indeks, dodano 6 brakujących indeksów dla poprawy wydajności zapytań.
+- [2025-11-07] Zaimplementowano Phase 1: Privacy Hardening dla agenta głosowego - dodano moduł sanitizacji danych (`privacy-utils.ts`), zaktualizowano wszystkie handlery w `elevenlabs-webhook` aby nigdy nie zwracały PESEL, telefonu, email ani danych innych pacjentów. Dodano rate limiting (100 req/min), audit logging wszystkich operacji agenta, oraz nowe funkcje: `add_note`, `update_note`, `reschedule_appointment`. Wszystkie odpowiedzi zawierają TYLKO niezbędne dane (imię, nazwisko, ID slotów).
+- [2025-11-07] Dodano migrację `20251107103000_insert_default_agent_config.sql`, która zapewnia domyślny rekord w `agent_config` i eliminuje błędy webhooka przy braku konfiguracji.
+- [2025-11-07] Przebudowano `AgentConfigPanel`: zapis konfiguracji trafia teraz do funkcji `agent-config`, a synchronizacja z ElevenLabs jest oddzielnym przyciskiem.
 - [2024-12-19] Przeprowadzono kompleksową analizę projektu KARTOTEKA - systemu zarządzania kliniką stomatologiczną
 - [2024-12-19] Zidentyfikowano architekturę: React 18 + TypeScript + Vite + Supabase + Tailwind CSS
 - [2024-12-19] Przeanalizowano funkcjonalności: dashboard, zarządzanie pacjentami, kalendarz wizyt, karty pacjentów
@@ -115,8 +144,73 @@
 - [2025-10-12] Poprawiono komunikaty w formularzu dodawania wizyt - precyzyjne alerty dla dni wolnych od pracy zamiast ogólnego "Ten termin nie jest dostępny"
 - [2025-10-12] Zastąpiono banner timeSlotWarning eleganckim AlertDialog w KalendarzWizyt - wyskakujące okienko na środku ekranu dla ostrzeżeń o terminach
 - [2025-10-12] Naprawiono funkcję handleSaveWizyta - zastąpiono wszystkie setError() AlertDialog dla dni wolnych od pracy i konfliktów terminów
+- [2025-11-01] Przeprowadzono diagnostykę problemu z wysyłką SMS - zidentyfikowano konflikt konfiguracji z starym project_id
+- [2025-11-01] Usunięto wszystkie referencje do starego project_id z kodu źródłowego
+- [2025-11-01] Usunięto debug logs z MessagesPage.tsx - wyczyszczono 15+ linii console.log
+- [2025-11-01] Zaktualizowano GITHUB_ACTIONS_SETUP.md z poprawnym project_id cepvvyfayleasraezptd
+- [2025-01-09] Przywrócono funkcjonalność wysyłki SMS i email z karty pacjenta - dodano przyciski w zakładce "Dane osobowe"
+- [2025-01-09] Zaimplementowano dialog wysyłki SMS z walidacją długości wiadomości (160 znaków) i integracją z Edge Function send-patient-sms
+- [2025-01-09] Zaimplementowano dialog wysyłki email z placeholderem dla przyszłej integracji z Edge Function
+- [2025-01-09] Przeniesiono przyciski "Wyślij SMS" i "Wyślij Email" do nagłówka strony karty pacjenta obok przycisku "Edytuj dane" dla lepszej widoczności
+- [2025-01-09] Dodano logi diagnostyczne do Edge Function send-admin-sms dla łatwiejszej diagnozy błędów 500 Internal Server Error
+- [2025-01-09] Naprawiono Edge Function send-admin-sms - przeniesiono pobieranie SMSAPI_TOKEN do wnętrza funkcji sendSms (tak jak w send-patient-sms) co rozwiązuje problem z 500 Internal Server Error
+- [2025-11-01] Zdiagnozowano problem "permission denied for schema public" (kod 42501) w funkcji send-admin-sms
+- [2025-11-01] Zidentyfikowano brak uprawnień service_role do tabel w schemacie public
+- [2025-11-01] Dodano migrację grant_service_role_permissions nadającą uprawnienia service_role do tabel pacjenci, wizyty, sms_logs
+- [2025-11-01] Zaktualizowano Edge Function send-admin-sms (wersja 14) - dodano konfigurację auth z autoRefreshToken: false i persistSession: false
+- [2025-01-27] Utworzono dokumentację ElevenLabs API (ELEVENLABS_DOCS.md) - kompletny przewodnik integracji z platformą
+- [2025-01-27] Dokumentacja zawiera: konfigurację MCP Server, główne funkcje API (TTS, Conversational AI, Voices, STT), przykłady kodu integracji z Supabase Edge Functions, planowaną integrację zgodnie z Faza 2: Voice AI, instrukcje bezpieczeństwa i testowania
+- [2025-01-27] Zapoznano się z oficjalną dokumentacją ElevenLabs API (https://elevenlabs.io/docs/api-reference) i zintegrowano informacje z projektem
+- [2025-11-05] Zaimplementowano kompletny system agenta głosowego z zarządzaniem konfiguracją z poziomu UI
+- [2025-11-05] Utworzono migrację bazy danych dla tabel agent_config i phone_conversations z pełnymi RLS policies
+- [2025-11-05] Zaimplementowano Edge Functions: agent-config (zarządzanie konfiguracją), elevenlabs-webhook (obsługa eventów), elevenlabs-personalization (personalizacja promptu)
+- [2025-11-05] Utworzono helper function _shared/get-agent-config.ts do wczytywania konfiguracji z bazy
+- [2025-11-05] Zaimplementowano komponent AgentConfigPanel z formularzami konfiguracji i edytorem promptu Markdown
+- [2025-11-05] Zintegrowano AgentConfigPanel w Home.tsx jako nową sekcję "Agent głosowy" w menu bocznym
+- [2025-11-05] Skonfigurowano Supabase Storage bucket agent-config z RLS policies dla przechowywania promptu w formacie Markdown
+- [2025-11-05] System umożliwia zarządzanie Agent ID, numerem telefonu Twilio i promptem bezpośrednio z poziomu przeglądarki
+- [2025-11-05] Prompt jest wczytywany dynamicznie przy każdym połączeniu z obsługą zmiennych {{current_date}}, {{current_time}}, {{caller_number}}
+- [2025-11-05] Edge Functions obsługują funkcje: verify_patient, get_available_slots, book_appointment, cancel_appointment
+- [2025-11-05] System loguje wszystkie rozmowy telefoniczne w tabeli phone_conversations z transkrypcjami
+- [2025-11-05] Wdrożono wszystkie Edge Functions przez MCP: agent-config (v1), elevenlabs-webhook (v1), elevenlabs-personalization (v1)
+- [2025-11-05] Zaktualizowano supabase.toml z konfiguracją dla nowych Edge Functions (verify_jwt settings)
+- [2025-11-05] Zaimplementowano kompletny system emailowy z własnym mailerem (SMTP/OAuth2)
+- [2025-11-05] Utworzono migrację bazy danych dla tabel email_accounts i email_inbox z pełnymi RLS policies
+- [2025-11-05] Zaimplementowano Edge Functions: email-config (zarządzanie kontami), send-email (wysyłka SMTP/Gmail/Outlook), fetch-emails (pobieranie emaili)
+- [2025-11-05] Zbudowano komponent EmailClient.tsx z pełnym UI klienta email (konta, skrzynka odbiorcza, wysłane)
+- [2025-11-05] Zintegrowano EmailClient w home.tsx jako nową zakładkę "Email" w menu bocznym
+- [2025-11-05] Zaktualizowano KartaPacjenta.tsx aby używał nowego systemu email z wyborem konta nadawcy
+- [2025-11-05] System emailowy obsługuje SMTP (własne serwery), Gmail API i Outlook API (OAuth2 - backend gotowy, wymaga implementacji frontend flow)
 
-# Podsumowanie przed zakończeniem pracy
+## Podsumowanie przed zakończeniem pracy
+- [2026-01-17] Ujednolicono logikę dostępności w MCP na bazie `schedule_slots` oraz wprowadzono rezerwację wieloslotową z tworzeniem wizyt i zwalnianiem slotów przy anulowaniu.
+- [2026-01-17] Generator `generate-slots` zachowuje teraz zarezerwowane sloty, co ogranicza ryzyko utraty powiązań z wizytami.
+- [2026-01-17] UI kalendarza korzysta z `manage-appointments` do wyszukiwania i rezerwacji slotów w Supabase.
+- [2026-01-17] Skorygowano mapowanie nazw dni tygodnia w `generate-slots`, aby sloty były generowane dla właściwych dni (zgodnie z `plany_pracy`).
+- [2026-01-17] Dodano fallback dla zapytań `urlopy` bez `resource_id`, aby uniknąć błędów 42703 w generowaniu slotów.
+- [2026-01-17] Zmieniono zapis slotów na `insert` (bez `onConflict`), aby generator działał bez unikalnego constraint.
+- [2026-01-17] Ustawiono `resource_id` na `null`, aby uniknąć błędu UUID podczas generowania slotów.
+- [2026-01-17] Wdrożono `generate-slots` i wygenerowano sloty dla zakresu 2026-01-23 → 2026-12-31.
+- [2026-01-17] Naprawiono błąd renderu kalendarza spowodowany wizytami bez powiązanego pacjenta.
+
+- [2025-11-13] **Sloty dla voice agenta**:
+  * Nowa funkcja `generate-slots` (Edge) generuje sloty 15-min z planu pracy, urlopów i pomija kolizje z wizytami.
+  * Tabela `schedule_slots` gotowa do produkcji (indeksy, trigger `updated_at`, RLS).
+  * Przygotowane scenariusze wywołań (cron Supabase/n8n), wytyczne do mapowania odpowiedzi dla Retell i workflow rezerwacji.
+- [2025-11-05] **Implementacja systemu emailowego z własnym mailerem**:
+  * Utworzono kompletną infrastrukturę emailową: tabele bazy danych, Edge Functions, komponenty UI
+  * System obsługuje SMTP (własne serwery mailowe) - w pełni funkcjonalny
+  * Backend dla OAuth2 (Gmail/Outlook) jest gotowy, ale wymaga implementacji frontend flow OAuth2
+  * Klient email umożliwia: zarządzanie kontami, wysyłkę emaili, przeglądanie historii, skrzynkę odbiorczą
+  * Integracja z kartą pacjenta - możliwość wysyłki emaili bezpoślnie do pacjenta
+  * Następne kroki: wdrożenie Edge Functions, implementacja OAuth2 flow (Google/Microsoft), testowanie
+
+- [2025-11-01] **Udana diagnostyka i naprawa funkcji send-admin-sms**:
+  * Zidentyfikowano błąd "permission denied for schema public" (kod 42501)
+  * Przyczyną był brak uprawnień service_role do tabel w schemacie public
+  * Dodano migrację grant_service_role_permissions nadającą pełne uprawnienia
+  * Zaktualizowano funkcję do wersji 14 z konfiguracją auth wymuszającą użycie service_role
+  * Funkcja powinna teraz działać poprawnie, wymaga testów w środowisku produkcyjnym
 
 - [2024-12-19] Analiza ujawniła zaawansowany system zarządzania pacjentami i wizytami z pełną integracją Supabase
 - [2024-12-19] System ma solidną architekturę i intuicyjny UX, ale wymaga dodania autoryzacji
@@ -180,7 +274,24 @@
 - [2025-10-02] Zaimplementowano kompleksowy system drukowania wizyt z notatkami - dostępny w Dashboard i Kalendarzu wizyt
 - [2025-10-02] Wydruki profesjonalnie sformatowane z logo kliniki, datami, statusami wizyt i notatkami dziennymi
 
-# Dalsze zadania
+## Dalsze zadania
+- [2026-01-17] Spiąć UI kalendarza z `schedule_slots` lub dodać edge endpoint do rezerwacji slotów z panelu administracyjnego.
+- [2026-01-17] Ujednolicić dropdown godzin w formularzu wizyty z `schedule_slots` (teraz opiera się na logice lokalnej).
+
+- [2025-11-13] **Automatyzacja slotów i voice agent**:
+  * Dokończyć konfigurację harmonogramu (wybrać: Supabase schedule + statyczny zakres czy n8n Cron).
+  * Zaimplementować w n8n rezerwacje wieloslotowe (30/45 min) z kontrolą kolizji i rollbackiem.
+  * Zaktualizować dokumentację agenta o mapowanie `result` → `tool_result` (slot_id, name, success).
+- [2025-11-09] **Callback workflow rozbudowa**:
+  * UI dashboardu: widget „Do oddzwonienia” z filtrowaniem po statusie i priorytecie.
+  * Automatyczne przenoszenie niepotwierdzonych próśb na kolejny dzień (cron + rollover_count).
+  * Akcje administratora: potwierdzenie wykonania telefonu, dodanie wyniku rozmowy.
+
+- [2025-11-01] **Testowanie funkcji send-admin-sms w środowisku produkcyjnym**:
+  * Przetestować wysyłkę SMS-ów dla daty 02.11.2025
+  * Sprawdzić logi funkcji w Dashboard Supabase
+  * Zweryfikować czy SMS-y zostały faktycznie wysłane
+  * Jeśli błąd 500 nadal występuje, zdiagnozować przyczynę na podstawie nowych logów
 
 ## Faza 1: SaaS MVP (3 miesiące)
 - [2025-10-08] Implementacja multi-tenant database (Supabase)
@@ -215,6 +326,11 @@
   * book-appointment (rezerwacja)
   * cancel-appointment (anulowanie)
 - [2025-10-08] Tabela phone_conversations (logi rozmów)
+- [2025-11-05] System emailowy z własnym mailerem
+  * ✅ SMTP (własne serwery) - gotowe
+  * ⏳ OAuth2 Gmail/Outlook - backend gotowy, wymaga frontend flow
+  * Klient email z pełnym UI (konta, wysyłka, odbiór)
+  * Integracja z kartą pacjenta
 
 ## Faza 3: Mobile & Desktop Apps (3 miesiące)
 - [2025-10-08] PWA (Progressive Web App)

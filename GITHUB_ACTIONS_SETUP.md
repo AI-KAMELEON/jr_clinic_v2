@@ -10,12 +10,17 @@ Dodaj następujące sekrety:
 
 #### **SUPABASE_URL**
 ```
-https://wxzhzanagvxsiazrekia.supabase.co
+https://cepvvyfayleasraezptd.supabase.co
 ```
 
 #### **SUPABASE_ANON_KEY**
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4emh6YW5hZ3Z4c2lhenJla2lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwOTQ1NDcsImV4cCI6MjA3MjY3MDU0N30.JkozbdNQ5ai6T4kxBBWeVnZXc6ZpV-f96s99Avlm0ng
+[Wstaw tutaj swój klucz ANON_KEY z dashboard Supabase]
+```
+
+#### **SUPABASE_SERVICE_ROLE_KEY**
+```
+[Wstaw tutaj swój klucz SERVICE_ROLE_KEY z dashboard Supabase]
 ```
 
 ### **2. Harmonogramy**

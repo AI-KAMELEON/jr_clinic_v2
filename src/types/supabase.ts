@@ -38,6 +38,97 @@ export type Database = {
         }
         Relationships: []
       }
+      callback_requests: {
+        Row: {
+          assigned_admin_id: string | null
+          attempt_count: number
+          callback_date: string
+          completed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          created_via: string
+          id: string
+          last_attempt_at: string | null
+          message: string | null
+          patient_id: string | null
+          patient_name: string | null
+          phone: string
+          preferred_time: string | null
+          priority: string
+          reason: string
+          requested_at: string
+          rollover_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_admin_id?: string | null
+          attempt_count?: number
+          callback_date?: string
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_via?: string
+          id?: string
+          last_attempt_at?: string | null
+          message?: string | null
+          patient_id?: string | null
+          patient_name?: string | null
+          phone: string
+          preferred_time?: string | null
+          priority?: string
+          reason: string
+          requested_at?: string
+          rollover_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_admin_id?: string | null
+          attempt_count?: number
+          callback_date?: string
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          created_via?: string
+          id?: string
+          last_attempt_at?: string | null
+          message?: string | null
+          patient_id?: string | null
+          patient_name?: string | null
+          phone?: string
+          preferred_time?: string | null
+          priority?: string
+          reason?: string
+          requested_at?: string
+          rollover_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "callback_requests_assigned_admin_id_fkey"
+            columns: ["assigned_admin_id"]
+            isOneToOne: false
+            referencedRelation: "administrators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "callback_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "phone_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "callback_requests_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacjenci"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cron_logs: {
         Row: {
           id: number
@@ -122,6 +213,45 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_conversations: {
+        Row: {
+          agent_id: string
+          conversation_id: string
+          created_at: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          phone_number: string | null
+          started_at: string | null
+          status: string | null
+          transcript: string | null
+        }
+        Insert: {
+          agent_id: string
+          conversation_id: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          phone_number?: string | null
+          started_at?: string | null
+          status?: string | null
+          transcript?: string | null
+        }
+        Update: {
+          agent_id?: string
+          conversation_id?: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          phone_number?: string | null
+          started_at?: string | null
+          status?: string | null
+          transcript?: string | null
+        }
+        Relationships: []
+      }
       plany_pracy: {
         Row: {
           aktywny: boolean
@@ -151,6 +281,59 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      schedule_slots: {
+        Row: {
+          created_at: string
+          id: string
+          linked_wizyta_id: string | null
+          metadata: Json
+          resource_id: string | null
+          slot_date: string
+          slot_end: string
+          slot_group_id: string | null
+          slot_start: string
+          slot_unit_minutes: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          linked_wizyta_id?: string | null
+          metadata?: Json
+          resource_id?: string | null
+          slot_date: string
+          slot_end: string
+          slot_group_id?: string | null
+          slot_start: string
+          slot_unit_minutes?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          linked_wizyta_id?: string | null
+          metadata?: Json
+          resource_id?: string | null
+          slot_date?: string
+          slot_end?: string
+          slot_group_id?: string | null
+          slot_start?: string
+          slot_unit_minutes?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_slots_wizyta_fkey"
+            columns: ["linked_wizyta_id"]
+            isOneToOne: false
+            referencedRelation: "wizyty"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sms_logs: {
         Row: {

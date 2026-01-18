@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import {
@@ -41,11 +41,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon, MessageSquare, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { validatePESEL, extractDateFromPESEL, formatPESEL } from "@/lib/utils";
 import { type VisitStatus } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Wizyta {
   id: string;
@@ -70,6 +72,7 @@ interface Pacjent {
 }
 
 const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
+  const { session } = useAuth();
   const [pacjent, setPacjent] = useState<Pacjent | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -136,6 +139,15 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
   const [duplicatePeselDialog, setDuplicatePeselDialog] = useState(false);
   const [duplicatePeselMessage, setDuplicatePeselMessage] = useState('');
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [selectedEmailAccount, setSelectedEmailAccount] = useState<string>('');
+  const [emailAccounts, setEmailAccounts] = useState<Array<{id: string; email_address: string; display_name?: string}>>([]);
+  const [sendingSms, setSendingSms] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Get visit background color based on status
   const getVisitBackgroundColor = (status?: VisitStatus): string => {
@@ -187,6 +199,42 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     }
   }, [pacjent]);
 
+  // Load email accounts when dialog opens - MUSI BYĆ PRZED EARLY RETURNS
+  const loadEmailAccounts = useCallback(async () => {
+    try {
+      if (!session) return;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-config`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to load email accounts");
+
+      const data = await response.json();
+      setEmailAccounts(data.accounts || []);
+      
+      // Auto-select first account if available
+      if (data.accounts && data.accounts.length > 0 && !selectedEmailAccount) {
+        setSelectedEmailAccount(data.accounts[0].id);
+      }
+    } catch (error) {
+      console.error("Error loading email accounts:", error);
+    }
+  }, [session, selectedEmailAccount]);
+
+  useEffect(() => {
+    if (emailDialogOpen && session) {
+      loadEmailAccounts();
+    }
+  }, [emailDialogOpen, session, loadEmailAccounts]);
+
+  // EARLY RETURNS - wszystkie hooki muszą być wywołane przed nimi
   if (loading) {
     return <div>Ładowanie danych pacjenta...</div>;
   }
@@ -420,6 +468,124 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     }
   };
 
+  // Obsługa wysyłki SMS
+  const handleSendSMS = async () => {
+    if (!smsMessage.trim()) {
+      alert('Wprowadź treść wiadomości SMS');
+      return;
+    }
+
+    if (smsMessage.length > 160) {
+      alert('SMS nie może być dłuższy niż 160 znaków');
+      return;
+    }
+
+    setSendingSms(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Brak aktywnej sesji');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-patient-sms`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pacjent_id: pacjent.id,
+            telefon: pacjent.telefon,
+            tresc: smsMessage,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.status === 'ok') {
+        alert('SMS wysłane pomyślnie!');
+        setSmsDialogOpen(false);
+        setSmsMessage('');
+      } else {
+        throw new Error(result.message || 'Błąd wysyłania SMS');
+      }
+    } catch (err: any) {
+      alert(`Błąd wysyłania SMS: ${err.message}`);
+    } finally {
+      setSendingSms(false);
+    }
+  };
+
+  // Obsługa wysyłki Email
+  const handleSendEmail = async () => {
+    if (!emailMessage.trim()) {
+      alert('Wprowadź treść wiadomości email');
+      return;
+    }
+
+    if (!emailSubject.trim()) {
+      alert('Wprowadź temat wiadomości');
+      return;
+    }
+
+    if (!selectedEmailAccount) {
+      alert('Wybierz konto email');
+      return;
+    }
+
+    if (!pacjent?.email) {
+      alert('Pacjent nie ma podanego adresu email');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email_account_id: selectedEmailAccount,
+            to: pacjent.email,
+            subject: emailSubject,
+            body_text: emailMessage,
+            body_html: emailMessage.replace(/\n/g, '<br>'),
+            pacjent_id: pacjent.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Email wysłany pomyślnie!');
+        setEmailDialogOpen(false);
+        setEmailMessage('');
+        setEmailSubject('');
+        setSelectedEmailAccount('');
+      } else {
+        throw new Error(result.error || 'Błąd wysyłania email');
+      }
+    } catch (err: any) {
+      alert(`Błąd wysyłania email: ${err.message}`);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-7xl mx-auto">
@@ -427,9 +593,17 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         <h1 className="text-3xl font-bold text-gray-800">
           Karta Pacjenta: {pacjent.imie} {pacjent.nazwisko}
         </h1>
-        <Button onClick={() => setEdytujDane(true)} variant="outline">
-          <PencilIcon className="h-4 w-4 mr-2" /> Edytuj dane
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setSmsDialogOpen(true)} variant="outline">
+            <MessageSquare className="h-4 w-4 mr-2" /> Wyślij SMS
+          </Button>
+          <Button onClick={() => setEmailDialogOpen(true)} variant="outline">
+            <Mail className="h-4 w-4 mr-2" /> Wyślij Email
+          </Button>
+          <Button onClick={() => setEdytujDane(true)} variant="outline">
+            <PencilIcon className="h-4 w-4 mr-2" /> Edytuj dane
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="dane" className="w-full">
@@ -815,6 +989,111 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog wysyłki SMS */}
+      <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Wyślij SMS do pacjenta</DialogTitle>
+            <DialogDescription>
+              Wiadomość zostanie wysłana na numer: {pacjent.telefon}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Treść wiadomości</Label>
+              <Textarea
+                value={smsMessage}
+                onChange={(e) => setSmsMessage(e.target.value)}
+                placeholder="Wprowadź treść wiadomości SMS..."
+                rows={4}
+                maxLength={160}
+              />
+              <div className="text-sm text-gray-500">
+                {smsMessage.length}/160 znaków
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSmsDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button onClick={handleSendSMS} disabled={sendingSms}>
+              {sendingSms ? 'Wysyłanie...' : 'Wyślij SMS'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog wysyłki Email */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Wyślij Email do pacjenta</DialogTitle>
+            <DialogDescription>
+              Wiadomość zostanie wysłana na adres: {pacjent.email}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {emailAccounts.length === 0 ? (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm text-yellow-800">
+                  Brak skonfigurowanych kont email. Skonfiguruj konto w sekcji "Email".
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Z konta *</Label>
+                  <Select
+                    value={selectedEmailAccount}
+                    onValueChange={setSelectedEmailAccount}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wybierz konto email" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.display_name || account.email_address}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Temat *</Label>
+                  <Input
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Temat wiadomości email..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Treść wiadomości *</Label>
+                  <Textarea
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                    placeholder="Wprowadź treść wiadomości email..."
+                    rows={6}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleSendEmail} 
+              disabled={sendingEmail || emailAccounts.length === 0}
+            >
+              {sendingEmail ? 'Wysyłanie...' : 'Wyślij Email'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
