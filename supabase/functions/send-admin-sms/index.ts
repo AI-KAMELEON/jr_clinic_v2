@@ -1,18 +1,17 @@
 import { serve } from "https://deno.land/std@0.181.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-const SMSAPI_URL = "https://api.smsapi.pl";
+const PLAY_API_URL = "https://uslugidlafirm.play.pl";
+
+// Stałe z ENV
+const clientId = Deno.env.get("CLIENT_ID");
+const clientSecret = Deno.env.get("CLIENT_SECRET");
+const from = Deno.env.get("SMS_FROM_NUMBER");
 
 // Supabase client (używaj service role do wstawiania logów)
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
 // CORS headers
@@ -22,30 +21,52 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Wysyłanie SMS przez SMSAPI
-async function sendSms(to: string, text: string): Promise<{ ok: boolean; body: any }> {
-  const smsapiToken = Deno.env.get("SMSAPI_TOKEN");
-  
-  if (!smsapiToken) {
-    throw new Error("Brak skonfigurowanego SMSAPI_TOKEN");
-  }
-  
-  const params = new URLSearchParams({
-    to: to,
-    message: text,
-    format: "json",
-  });
-
-  const resp = await fetch(`${SMSAPI_URL}/sms.do?${params}`, {
+// Token Play
+async function getAccessToken(): Promise<string> {
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+  const resp = await fetch(`${PLAY_API_URL}/oauth/token-jwt`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${smsapiToken}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
     },
   });
 
-  const body = await resp.json();
-  return { ok: resp.ok, body };
+  if (!resp.ok) {
+    const errorMsg = await resp.text();
+    throw new Error(
+      `Błąd przy pobieraniu tokena: ${resp.status} ${resp.statusText} → ${errorMsg}`
+    );
+  }
+
+  const data = await resp.json();
+  return data.access_token;
+}
+
+// Wysyłanie SMS Play
+async function sendSms(
+  token: string,
+  to: string[],
+  text: string
+): Promise<{ ok: boolean; body: string }> {
+  const resp = await fetch(`${PLAY_API_URL}/api/bramkasms/sendSms`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      text,
+      to,
+    }),
+  });
+
+  const body = await resp.text();
+  return {
+    ok: resp.ok,
+    body,
+  };
 }
 
 // Normalizacja numeru do MSISDN (format: 48XXXXXXXXX)
@@ -62,17 +83,13 @@ function formatTime(time: string): string {
 }
 
 serve(async (req: Request) => {
-  // Obsługa preflight (CORS preflight requests)
+  // 👇 Obsługa preflight (CORS preflight requests)
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    console.log("send-admin-sms called");
-    const body = await req.json();
-    console.log("Raw request body:", JSON.stringify(body));
-    const { date, type, customText } = body;
-    console.log("Parameters:", { date, type, customText });
+    const { date, type, customText } = await req.json();
 
     if (!date || !type) {
       return new Response(
@@ -91,7 +108,8 @@ serve(async (req: Request) => {
     if (!validTypes.includes(type)) {
       return new Response(
         JSON.stringify({
-          error: "Nieprawidłowy typ. Dozwolone: PRZYPOMNIENIE, ODWOLANIE, INNE",
+          error:
+            "Nieprawidłowy typ. Dozwolone: PRZYPOMNIENIE, ODWOLANIE, INNE",
         }),
         {
           status: 400,
@@ -100,35 +118,20 @@ serve(async (req: Request) => {
       );
     }
 
-    // Pobierz wizyty + pacjentów, filtrując tylko te o statusie 'zaplanowana'
-    console.log("Fetching visits for date:", date);
-    const { data: visits, error } = await supabase
-      .from("wizyty")
-      .select(`
-        id,
-        data,
-        godzina,
-        pacjenci!inner(id, telefon)
-      `)
-      .eq("data", date)
-      .eq("status", "zaplanowana");
-
-    if (error) {
-      console.error("Database error:", error);
-      return new Response(
-        JSON.stringify({
-          status: "error",
-          error: "Błąd pobierania wizyt z bazy danych",
-          details: error.message,
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+    if (!clientId || !clientSecret || !from) {
+      throw new Error(
+        "Brak wymaganych secrets: CLIENT_ID, CLIENT_SECRET, SMS_FROM_NUMBER"
       );
     }
-    
-    console.log("Found visits:", visits?.length || 0);
+
+    // Pobierz wizyty + pacjentów, filtrując tylko te o statusie 'zaplanowana'
+    const { data: visits, error } = await supabase
+      .from("wizyty")
+      .select("id, data, godzina, pacjenci(id, telefon)")
+      .eq("data", date)
+      .eq("status", "zaplanowana"); // <-- KLUCZOWA ZMIANA
+
+    if (error) throw error;
 
     if (!visits || visits.length === 0) {
       return new Response(
@@ -145,16 +148,16 @@ serve(async (req: Request) => {
       );
     }
 
-    let sent = 0, failed = 0;
+    const token = await getAccessToken();
+    let sent = 0,
+      failed = 0;
     const errors: string[] = [];
 
     for (const v of visits) {
-      console.log("Processing visit:", v.id, "patient:", v.pacjenci?.id);
       const visitTime = formatTime(v.godzina);
       const patient = v.pacjenci;
 
       if (!patient || !patient.telefon) {
-        console.log("No patient or phone for visit:", v.id, "patient:", patient);
         failed++;
         errors.push(`Brak telefonu dla wizyty ${v.id}`);
         continue;
@@ -170,35 +173,20 @@ serve(async (req: Request) => {
       let text: string;
       if (type === "PRZYPOMNIENIE") {
         text = `Dzień dobry,
-Przypominamy o jutrzejszej wizycie.
-Godzina: ${visitTime}
-Visitella
-Warszawa`;
+Przypominamy o jutrzejszej wizycie,
+Godzina: ${visitTime},
+JR Clinic,
+Rynek 7,
+Maków Mazowiecki`;
       } else if (type === "ODWOLANIE") {
-        text = `Z przykrością musimy odwołać Twoją wizytę w dniu ${v.data} o godzinie ${visitTime}. Prosimy o kontakt w celu ustalenia nowego terminu. Visitella, Warszawa`;
+        text = `Z przykrością musimy odwołać Twoją wizytę w naszej klinice w dniu ${v.data} o godzinie ${visitTime}. Prosimy o kontakt w celu ustalenia nowego terminu.`;
       } else {
         text = customText || "";
       }
 
-      // Walidacja długości SMS (limit SMSAPI: 160 znaków)
-      if (text.length > 160) {
-        failed++;
-        errors.push(`Wiadomość dla wizyty ${v.id} przekracza limit 160 znaków (${text.length} znaków)`);
-        continue;
-      }
+      const result = await sendSms(token, [normalized], text);
 
-      const result = await sendSms(normalized, text);
-
-      // Szczegółowe logowanie odpowiedzi API dla diagnozy
-      console.log(`SMS API response for ${normalized}:`, {
-        ok: result.ok,
-        status: result.body?.error?.code || 'unknown',
-        message: result.body?.error?.message || result.body?.message || 'unknown',
-        fullResponse: result.body
-      });
-
-      // Zapis logu do sms_logs (opcjonalnie - nie blokujemy sukcesu jeśli SMS się wysłał)
-      const { error: logError } = await supabase.from("sms_logs").insert({
+      await supabase.from("sms_logs").insert({
         wizyta_id: v.id,
         pacjent_id: patient.id,
         telefon: normalized,
@@ -209,50 +197,10 @@ Warszawa`;
         status: result.ok ? "SENT" : "FAILED",
       });
 
-      if (logError) {
-        console.error("Database error (logowanie):", logError);
-        // ❌ NIE RZUCAJ BŁĘDEM jeśli SMS się wysłał!
-        // To tylko problem z logowaniem, nie z wysyłką
-      }
-
       if (result.ok) sent++;
       else {
         failed++;
-        // Szczegółowe komunikaty błędów na podstawie odpowiedzi SMSAPI
-        let errorMessage = `Błąd SMS dla ${normalized}`;
-        if (result.body?.error) {
-          const errorCode = result.body.error.code;
-          const errorMsg = result.body.error.message;
-
-          switch (errorCode) {
-            case 11:
-              errorMessage += ": Nieprawidłowy numer odbiorcy";
-              break;
-            case 12:
-              errorMessage += ": Niewystarczające środki na koncie";
-              break;
-            case 13:
-              errorMessage += ": Błąd autoryzacji - nieprawidłowy token";
-              break;
-            case 14:
-              errorMessage += ": Nieprawidłowa długość wiadomości";
-              break;
-            case 17:
-              errorMessage += ": Limit wysyłki przekroczony";
-              break;
-            case 18:
-              errorMessage += ": Nieprawidłowy nadawca";
-              break;
-            case 101:
-              errorMessage += ": Nieprawidłowe parametry żądania";
-              break;
-            default:
-              errorMessage += `: ${errorMsg || 'Nieznany błąd API'}`;
-          }
-        } else {
-          errorMessage += `: ${JSON.stringify(result.body) || 'Nieznany błąd'}`;
-        }
-        errors.push(errorMessage);
+        errors.push(`Błąd SMS dla ${normalized}: ${result.body}`);
       }
     }
 
@@ -270,20 +218,10 @@ Warszawa`;
       }
     );
   } catch (err) {
-    console.error("Function error:", err);
-    // Szczegółowe logowanie błędów dla diagnozy
-    if (err instanceof Error) {
-      console.error("Error name:", err.name);
-      console.error("Error message:", err.message);
-      console.error("Error stack:", err.stack);
-    } else {
-      console.error("Non-Error exception:", typeof err, err);
-    }
     return new Response(
       JSON.stringify({
         status: "error",
         error: err instanceof Error ? err.message : "Unknown error",
-        type: err instanceof Error ? err.name : typeof err,
       }),
       {
         status: 500,

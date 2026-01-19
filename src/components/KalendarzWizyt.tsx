@@ -117,10 +117,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [availableSlots, setAvailableSlots] = useState<
     Array<{ date: string; time: string; displayDate: string }>
   >([]);
-  const [lastSlotCursor, setLastSlotCursor] = useState<{
-    date: string;
-    time: string;
-  } | null>(null);
+  const [currentSearchDate, setCurrentSearchDate] = useState<Date>(new Date());
+  const [currentSearchTimeIndex, setCurrentSearchTimeIndex] = useState(0);
   const [slotDuration, setSlotDuration] = useState<'15min' | '30min'>('15min');
 
   // Plan pracy
@@ -368,7 +366,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   // Fetch wizyty for a specific date range
-  const fetchWizytyForRange = async (startDate: string, endDate: string, cacheKey: string, forceRefresh: boolean = false): Promise<WizytaWithPacjent[]> => {
+  const fetchWizytyForRange = async (startDate: string, endDate: string, cacheKey: string, forceRefresh: boolean = false) => {
     try {
       // Sprawdź cache tylko jeśli nie wymuszamy odświeżenia
       if (!forceRefresh && wizytyCache.has(cacheKey)) {
@@ -387,7 +385,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           cached.forEach(w => merged.set(w.id, w));
           return Array.from(merged.values());
         });
-        return cached; // ZWRÓĆ wizyty z cache
+        return;
       }
 
       const { data, error } = await supabase
@@ -395,7 +393,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         .select(
           `
           *,
-          pacjenci!inner(*)
+          pacjenci (*)
         `,
         )
         .gte("data", startDate)
@@ -405,12 +403,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
       if (error) throw error;
 
-      const fetchedWizyty = (data || []) as WizytaWithPacjent[];
-
       // Zapisz w cache
       setWizytyCache(prev => {
         const newCache = new Map(prev);
-        newCache.set(cacheKey, fetchedWizyty);
+        newCache.set(cacheKey, data || []);
         return newCache;
       });
 
@@ -425,15 +421,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           }
         });
         // Dodaj nowe wizyty dla tego zakresu
-        fetchedWizyty.forEach(w => merged.set(w.id, w));
+        (data || []).forEach(w => merged.set(w.id, w));
         return Array.from(merged.values());
       });
-      
-      return fetchedWizyty; // ZWRÓĆ pobrane wizyty
     } catch (err) {
       console.error("Error fetching wizyty for range:", err);
       setError("Błąd podczas pobierania wizyt");
-      return []; // ZWRÓĆ pustą tablicę w przypadku błędu
     }
   };
 
@@ -601,35 +594,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     return endMinutes - startMinutes;
   };
 
-  const getVisitDurationMinutes = (): number => {
-    if (visitDuration === 'custom') {
-      if (customDurationMinutes) {
-        return customDurationMinutes;
-      }
-      if (nowaWizyta.godzina_od && nowaWizyta.godzina_do) {
-        return calculateDuration(nowaWizyta.godzina_od, nowaWizyta.godzina_do);
-      }
-      return 60;
-    }
-    return visitDuration === '15min' ? 15 : 30;
-  };
-
-  const invokeManageAppointments = async (payload: Record<string, any>) => {
-    const { data, error } = await supabase.functions.invoke("manage-appointments", {
-      body: payload,
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data?.success) {
-      throw new Error(data?.message || data?.error || "Nieznany błąd");
-    }
-
-    return data;
-  };
-
   // Update visit times based on duration selection
   const updateVisitTimes = (startTime: string, duration: '15min' | '30min' | 'custom', customStart?: string, customEnd?: string, customMinutes?: number) => {
     if (duration === 'custom') {
@@ -684,17 +648,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return [];
     }
 
-    // Get existing visits for this date (exclude cancelled visits)
-    // Jeśli visitsForDate jest podane (nawet jeśli puste), użyj go bezpośrednio
-    // Nie używaj fallbacku do globalnego stanu, bo może nie zawierać wizyt dla tej daty
-    let wizytyNaDzien: WizytaWithPacjent[];
-    if (visitsForDate !== undefined) {
-      // Wizyty są już przefiltrowane po dacie z mapy (w znajdzNajblizszeTerminy), tylko usuń anulowane
-      wizytyNaDzien = visitsForDate.filter((w) => w.status && w.status !== 'odwolana');
-    } else {
-      // Tylko jeśli visitsForDate nie jest podane, użyj globalnego stanu i przefiltruj po dacie
-      wizytyNaDzien = wizyty.filter((w) => isSameDate(w.data, date) && w.status && w.status !== 'odwolana');
-    }
+    // Użyj przekazanych wizyt lub wizyt z state (exclude cancelled visits)
+    const wizytyNaDzien = visitsForDate 
+      ? visitsForDate.filter((w) => w.status !== 'odwolana')
+      : wizyty.filter((w) => isSameDate(w.data, date) && w.status !== 'odwolana');
     
     const hours: string[] = [];
     const startTime = daySchedule.godziny.od;
@@ -776,7 +733,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       return [];
     }
 
-    // Get existing visits for this date (exclude cancelled visits) - użyj isSameDate dla niezawodności
+    // Get existing visits for this date (exclude cancelled visits)
     const wizytyNaDzien = wizyty.filter((w) => isSameDate(w.data, date) && w.status !== 'odwolana');
     
     const slots: Array<{time: string, available: boolean, reason?: string}> = [];
@@ -1127,23 +1084,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const handleUpdateVisitStatus = async (wizyta: WizytaWithPacjent, status: VisitStatus) => {
     setLoading(true);
     try {
-      if (wizyta.status === "odwolana" && status !== "odwolana") {
-        throw new Error("Nie można przywrócić odwołanej wizyty. Użyj przełożenia.");
-      }
+      const { error } = await supabase
+        .from("wizyty")
+        .update({ status })
+        .eq("id", wizyta.id);
 
-      if (status === "odwolana") {
-        await invokeManageAppointments({
-          action: "cancel",
-          appointment_id: wizyta.id,
-        });
-      } else {
-        const { error } = await supabase
-          .from("wizyty")
-          .update({ status })
-          .eq("id", wizyta.id);
-
-        if (error) throw error;
-      }
+      if (error) throw error;
 
       // Refresh wizyty for the date of updated visit
       if (wizyta.data) {
@@ -1153,7 +1099,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       }
     } catch (err) {
       console.error("Error updating visit status:", err);
-      setError(err instanceof Error ? err.message : "Błąd podczas aktualizacji statusu wizyty");
+      setError("Błąd podczas aktualizacji statusu wizyty");
     } finally {
       setLoading(false);
     }
@@ -1164,13 +1110,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
     setLoading(true);
     try {
-      const wizytaDate = selectedWizyta.data;
-
-      await invokeManageAppointments({
-        action: "cancel",
-        appointment_id: selectedWizyta.id,
-      });
-
       const { error } = await supabase
         .from("wizyty")
         .delete()
@@ -1179,8 +1118,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       if (error) throw error;
 
       // Refresh wizyty for the date of deleted visit
-      if (wizytaDate) {
-        await refreshWizytyForDate(wizytaDate);
+      if (selectedWizyta?.data) {
+        await refreshWizytyForDate(selectedWizyta.data);
       } else {
         await fetchWizyty();
       }
@@ -1340,60 +1279,45 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setError(null);
 
     try {
-      const startTime = nowaWizyta.godzina_od || nowaWizyta.godzina;
-      const endTime = nowaWizyta.godzina_do || addMinutesToTime(nowaWizyta.godzina, 30);
-      const durationMinutes = getVisitDurationMinutes();
-
       if (selectedWizyta) {
-        const oldStart = selectedWizyta.godzina_od || selectedWizyta.godzina;
-        const oldEnd = selectedWizyta.godzina_do || addMinutesToTime(selectedWizyta.godzina, 30);
-        const timeChanged =
-          selectedWizyta.data !== nowaWizyta.data ||
-          oldStart !== startTime ||
-          oldEnd !== endTime;
-
-        if (timeChanged) {
-          await invokeManageAppointments({
-            action: "reschedule",
-            old_appointment_id: selectedWizyta.id,
-            patient_id: nowaWizyta.pacjent_id,
-            slot_date: nowaWizyta.data,
-            slot_start: startTime,
-            duration_minutes: durationMinutes,
-            rodzaj: nowaWizyta.rodzaj,
-            notatki: nowaWizyta.notatki || "",
-          });
-        } else {
-          await invokeManageAppointments({
-            action: "update",
-            appointment_id: selectedWizyta.id,
+        // Update existing wizyta
+        const { error } = await supabase
+          .from("wizyty")
+          .update({
             pacjent_id: nowaWizyta.pacjent_id,
+            data: nowaWizyta.data,
+            godzina: nowaWizyta.godzina,
+            godzina_od: nowaWizyta.godzina_od,
+            godzina_do: nowaWizyta.godzina_do,
             rodzaj: nowaWizyta.rodzaj,
             notatki: nowaWizyta.notatki || "",
-            status: nowaWizyta.status && nowaWizyta.status !== "odwolana"
-              ? nowaWizyta.status
-              : undefined,
-          });
-        }
+            status: nowaWizyta.status || "zaplanowana",
+          })
+          .eq("id", selectedWizyta.id);
+
+        if (error) throw error;
       } else {
-        await invokeManageAppointments({
-          action: "book",
-          patient_id: nowaWizyta.pacjent_id,
-          slot_date: nowaWizyta.data,
-          slot_start: startTime,
-          duration_minutes: durationMinutes,
+        // Insert new wizyta
+        const { error } = await supabase.from("wizyty").insert({
+          pacjent_id: nowaWizyta.pacjent_id,
+          data: nowaWizyta.data,
+          godzina: nowaWizyta.godzina,
+          godzina_od: nowaWizyta.godzina_od,
+          godzina_do: nowaWizyta.godzina_do,
           rodzaj: nowaWizyta.rodzaj,
           notatki: nowaWizyta.notatki || "",
+          status: nowaWizyta.status || "zaplanowana",
         });
+
+        if (error) throw error;
       }
 
       console.log('✅ DEBUG - Wizyta zapisana pomyślnie');
-      // Odśwież wizyty dla daty zapisanej wizyty (z ominięciem cache)
+      // Refresh wizyty for the date of saved visit
       if (nowaWizyta.data) {
         await refreshWizytyForDate(nowaWizyta.data);
-        setSelectedDate(new Date(nowaWizyta.data + "T00:00:00"));
       } else {
-        await fetchWizyty(true);
+        await fetchWizyty();
       }
       
       // Pokaż komunikat sukcesu
@@ -1419,7 +1343,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       if (err.code === "23505") {
         setError("Ten termin jest już zajęty. Wybierz inną godzinę.");
       } else {
-        setError(err?.message || "Błąd podczas zapisywania wizyty");
+        setError("Błąd podczas zapisywania wizyty");
       }
     } finally {
       console.log('🔚 DEBUG - handleSaveWizyta END');
@@ -1442,7 +1366,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   // Funkcje pomocnicze dla widoków (zdefiniowane wcześniej, przed fetchWizyty)
 
   const getWizytyForDate = (date: Date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
     return wizyty
       .filter((wizyta) => {
         // Użyj tej samej logiki co wizytyNaDzien (która działa!)
@@ -1833,9 +1756,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   const znajdzNajblizszeTerminy = async (
-    _startDate: Date = new Date(),
+    startDate: Date = new Date(),
     limit: number = 10,
-    _startTimeIndex: number = 0,
+    startTimeIndex: number = 0,
     append: boolean = false,
     overrideDuration?: '15min' | '30min',
   ) => {
@@ -1843,52 +1766,111 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setError(null);
 
     try {
-      if (!append) {
-        setLastSlotCursor(null);
-      }
+      const slots: Array<{ date: string; time: string; displayDate: string }> =
+        [];
+      let currentDate = new Date(startDate);
+      let daysChecked = 0;
+      const maxDaysToCheck = 60;
+      const now = new Date();
+      const todayStr = format(now, "yyyy-MM-dd");
+      const currentTime = format(now, "HH:mm:ss");
+      let currentTimeIndex = startTimeIndex;
+      let isFirstDay = true;
+      
+      // Użyj overrideDuration jeśli podano, w przeciwnym razie użyj state
       const activeDuration = overrideDuration || slotDuration;
-      const durationMinutes = activeDuration === '15min' ? 15 : 30;
-      const startAfter = append && lastSlotCursor
-        ? `${lastSlotCursor.date}T${lastSlotCursor.time}`
-        : undefined;
 
-      const data = await invokeManageAppointments({
-        action: "get_available_slots",
-        limit,
-        duration_minutes: durationMinutes,
-        start_after: startAfter,
-      });
-
-      const slots = (data?.slots || []).map((slot: any) => ({
-        date: slot.date,
-        time: slot.time,
-        displayDate: format(new Date(slot.date + "T00:00:00"), "EEEE, d MMMM yyyy", {
-          locale: pl,
-        }),
+      // Pobierz wizyty dla zakresu dat (startDate do startDate + maxDaysToCheck dni)
+      const endSearchDate = new Date(startDate);
+      endSearchDate.setDate(endSearchDate.getDate() + maxDaysToCheck);
+      const startDateStr = format(startDate, "yyyy-MM-dd");
+      const endDateStr = format(endSearchDate, "yyyy-MM-dd");
+      
+      const { data: allVisits, error: visitsError } = await supabase
+        .from("wizyty")
+        .select(`*, pacjenci (*)`)
+        .gte("data", startDateStr)
+        .lte("data", endDateStr)
+        .neq("status", "odwolana")
+        .order("data")
+        .order("godzina");
+      
+      if (visitsError) throw visitsError;
+      
+      // Konwertuj na format WizytaWithPacjent
+      const allVisitsFormatted: WizytaWithPacjent[] = (allVisits || []).map(v => ({
+        ...v,
+        pacjenci: v.pacjenci as Pacjent
       }));
 
+      while (slots.length < limit && daysChecked < maxDaysToCheck) {
+        const dataStr = format(currentDate, "yyyy-MM-dd");
+        if (isDateAvailable(dataStr)) {
+          // Użyj wizyt pobranych z bazy dla tego dnia
+          const wizytyNaDzien = allVisitsFormatted.filter((w) => isSameDate(w.data, dataStr));
+          const workingHours = generateWorkingHours(dataStr, activeDuration, undefined, wizytyNaDzien);
+          
+          let wolneGodziny = workingHours;
+
+          if (dataStr === todayStr) {
+            wolneGodziny = wolneGodziny.filter(godzina => godzina > currentTime);
+          }
+
+          // Dla pierwszego dnia: zacznij od currentTimeIndex
+          // Dla kolejnych dni: zacznij od indeksu 0
+          const startIdx = isFirstDay ? currentTimeIndex : 0;
+          
+          // Dodaj wolne godziny zaczynając od właściwego indeksu
+          for (let i = startIdx; i < wolneGodziny.length && slots.length < limit; i++) {
+            const godzina = wolneGodziny[i];
+            slots.push({
+              date: dataStr,
+              time: godzina,
+              displayDate: format(currentDate, "EEEE, d MMMM yyyy", {
+                locale: pl,
+              }),
+            });
+            currentTimeIndex = i + 1;
+          }
+
+          // Jeśli wykorzystaliśmy wszystkie godziny z tego dnia, zresetuj indeks i przejdź do następnego dnia
+          if (currentTimeIndex >= wolneGodziny.length) {
+            currentTimeIndex = 0;
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          // Jeśli osiągnęliśmy limit w trakcie dnia, zostajemy w tym samym dniu
+          else if (slots.length >= limit) {
+            break;
+          }
+        } else {
+          // Jeśli dzień niedostępny, przejdź do następnego
+          currentDate.setDate(currentDate.getDate() + 1);
+          currentTimeIndex = 0;
+        }
+
+        isFirstDay = false;
+        daysChecked++;
+      }
+
+      // Dodaj do istniejących slotów jeśli append=true, w przeciwnym razie zastąp
       if (append) {
-        setAvailableSlots((prev) => [...prev, ...slots]);
+        setAvailableSlots(prev => [...prev, ...slots]);
       } else {
         setAvailableSlots(slots);
       }
-
-      if (slots.length > 0) {
-        const last = slots[slots.length - 1];
-        setLastSlotCursor({ date: last.date, time: last.time });
-      } else if (!append) {
-        setLastSlotCursor(null);
-      }
-    } catch (err: any) {
+      
+      setCurrentSearchDate(new Date(currentDate));
+      setCurrentSearchTimeIndex(currentTimeIndex);
+    } catch (err) {
       console.error("Error finding available slots:", err);
-      setError(err?.message || "Błąd podczas wyszukiwania wolnych terminów");
+      setError("Błąd podczas wyszukiwania wolnych terminów");
     } finally {
       setSearchingSlots(false);
     }
   };
 
   const znajdzKolejneTerminy = () => {
-    znajdzNajblizszeTerminy(new Date(), 10, 0, true, slotDuration);
+    znajdzNajblizszeTerminy(currentSearchDate, 10, currentSearchTimeIndex, true, slotDuration);
   };
 
   const selectTimeSlot = (date: string, time: string) => {
@@ -1912,10 +1894,15 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setIsDialogOpen(true);
   };
 
+  // Inicjalne wyszukanie terminów
+  useEffect(() => {
+    if (wizyty.length > 0) {
+      znajdzNajblizszeTerminy(new Date(), 10, 0, false, slotDuration);
+    }
+  }, [wizyty]);
+
   // Search for patients - ONLY when user explicitly requests it via button
   // useEffect removed - no automatic searching
-  // USUNIĘTO: useEffect z wizyty w zależnościach powodował nieskończoną pętlę
-  // Wyszukiwanie wolnych terminów jest teraz wywoływane tylko ręcznie przez użytkownika (przycisk "Znajdź najbliższe terminy")
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-md w-full">
@@ -2098,7 +2085,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
                           <p className="text-xs text-green-600">
-                            Godziny pracy: {planPracy[getDayName(selectedDate)]?.godziny?.od || "08:00"} - {planPracy[getDayName(selectedDate)]?.godziny?.do || "17:00"}
+                            Godziny pracy: {planPracy[getDayName(selectedDate)]?.godziny?.od || 'N/A'} - {planPracy[getDayName(selectedDate)]?.godziny?.do || 'N/A'}
                           </p>
                         </div>
                       ) : (
@@ -2445,9 +2432,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                               isVacation ? "bg-red-50 border-red-200" :
                               isToday ? "bg-blue-50 border-blue-200" : 
                               isSelected ? "bg-gray-50 border-gray-300" : 
-                              isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : // Dni pracujące - białe tło niezależnie od miesiąca
-                              isCurrentMonth ? "bg-gray-100 border-gray-200" : // Dni wolne w bieżącym miesiącu - szare
-                              "bg-gray-50 border-gray-100 text-gray-400" // Dni wolne w innych miesiącach - szare
+                              isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : 
+                              "bg-gray-100 border-gray-200"
                             } ${!isCurrentMonth ? "opacity-60" : ""}`}
                             onClick={() => {
                               setSelectedDate(date);
