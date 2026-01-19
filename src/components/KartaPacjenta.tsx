@@ -105,7 +105,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             data: new Date(wizyta.data + 'T' + wizyta.godzina),
             rodzaj: wizyta.rodzaj,
             notatki: wizyta.notatki || '',
-            status: wizyta.status || 'zaplanowana'
+            status: (wizyta.status || 'zaplanowana') as VisitStatus
           })) || [];
 
           setPacjent({
@@ -378,8 +378,10 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             pacjent_id: pacjentId,
             data: formWizyta.data,
             godzina: formWizyta.czas,
+            godzina_od: formWizyta.czas,
+            godzina_do: formWizyta.czas,
             rodzaj: formWizyta.rodzaj,
-            notatki: formWizyta.notatki
+            notatki: formWizyta.notatki || null
           })
           .select()
           .single();

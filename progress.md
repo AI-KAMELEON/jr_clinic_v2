@@ -14,6 +14,24 @@
 - [2026-01-17] Zabezpieczono pobieranie wizyt w `KalendarzWizyt` przez `pacjenci!inner(*)`, aby nie renderować wizyt bez pacjenta.
 - [2025-11-20] Zaktualizowano Edge Function `generate-slots`: teraz pobiera istniejące wizyty i weryfikuje kolizje przy generowaniu slotów. Funkcja generuje automatycznie zarówno sloty 15-minutowe, jak i 30-minutowe dla każdego dostępnego terminu, co pozwala agentowi AI łatwo filtrować po `slot_unit_minutes` bez dodatkowej logiki.
 - [2025-11-20] Zaktualizowano dokumentację `VOICE_AGENT_SLOTS.md` o nowy model podwójnych slotów (15/30 min) i przykłady zapytań dla agenta.
+- [2025-11-14] Naprawiono problem z wyświetlaniem wizyt na styczeń i luty 2026 - wizyty były w bazie, ale nie były widoczne w kalendarzu
+- [2025-11-14] Dodano funkcję pomocniczą isSameDate do niezawodnego porównywania dat (zamiast porównywania stringów)
+- [2025-11-14] Poprawiono funkcję getWizytyForDate - używa teraz porównania dat zamiast stringów dla poprawnego wyświetlania wizyt
+- [2025-11-14] Poprawiono walidację konfliktów w handleSaveWizyta - używa porównania dat, co eliminuje błąd 409 Conflict przy dodawaniu wizyt
+- [2025-11-14] Poprawiono wszystkie miejsca z filtrowaniem wizyt po dacie - funkcja isSameDate używana w 8 miejscach w kodzie
+- [2025-11-14] Naprawiono problem z dodawaniem wizyt na styczeń 2026 - teraz system poprawnie wykrywa konflikty i pozwala dodawać wizyty
+- [2025-11-14] Naprawiono funkcję getWizytyForDate - przywrócono logikę bezpośredniego porównywania dat (identyczną jak w wizytyNaDzien) zamiast używania isSameDate, co rozwiązuje problem z wyświetlaniem wizyt na 2026
+- [2025-11-14] Zdiagnozowano główny problem: Supabase domyślnie zwraca max 1000 rekordów - wizyty z 2026 były poza limitem. Przeprojektowano system pobierania wizyt - zamiast pobierać wszystkie wizyty na raz, teraz pobiera tylko wizyty dla aktualnie wyświetlanego zakresu (dzień/tydzień/miesiąc) z cache'owaniem zakresów
+- [2025-11-14] Naprawiono błąd RangeError: Invalid time value w kalendarzu wizyt - dodano warunkowe sprawdzenie selectedDate przed użyciem funkcji format() i getDayName()
+- [2025-11-14] Dodano walidację pustych/nieprawidłowych dat w funkcjach isWorkingDay i isVacationDay - funkcje zwracają false dla pustych stringów i nieprawidłowych dat zamiast rzucać błędy
+- [2025-11-14] Dodano zabezpieczenie przed użyciem undefined selectedDate w JSX - wyświetlany jest komunikat "Wybierz datę" gdy selectedDate jest undefined
+- [2025-11-14] Naprawiono problem z podświetlaniem dni pracujących w 2026 - poprawiono logikę isCurrentMonth używając środkowego dnia z monthDates zamiast selectedDate
+- [2025-11-14] Dodano funkcję refreshWizytyForDate z forceRefresh - automatyczne odświeżanie danych po zapisie/aktualizacji/usunięciu wizyty
+- [2025-11-14] Dodano komunikaty sukcesu z AlertDialog po dodaniu/usunięciu wizyty - użytkownik otrzymuje potwierdzenie wykonanej akcji
+- [2025-11-14] Naprawiono funkcję znajdzNajblizszeTerminy - teraz pobiera wszystkie wizyty z 60-dniowego zakresu bezpośrednio z bazy, co eliminuje problem pokazywania zajętych slotów jako dostępnych
+- [2025-11-14] Zaktualizowano funkcję generateWorkingHours - dodano opcjonalny parametr visitsForDate dla przekazywania konkretnych wizyt, co pozwala na precyzyjne sprawdzanie dostępności slotów
+- [2025-11-14] Dodano numery telefonów pacjentów do wydruku wizyt w kalendarzu - format: czas, imię i nazwisko, telefon, rodzaj wizyty, notatki
+- [2025-11-14] Zaktualizowano funkcję drukowania w Dashboard - dodano numery telefonów i poprawiono format wydruku zgodny z formatem w kalendarzu
 - [2025-11-13] Utworzono tabelę `schedule_slots` z indeksami, triggerem aktualizującym `updated_at`, oraz politykami RLS (pełny dostęp `service_role`, tylko odczyt `authenticated`) dla obsługi 15-min slotów.
 - [2025-11-13] Wdrożono Edge Function `generate-slots` (deploy przez MCP) generującą wolne sloty na podstawie `plany_pracy`, `urlopy` i istniejących wizyt; dodano obsługę polskich nazw dni i filtr kolizji.
 - [2025-11-13] Skonfigurowano wywołania cykliczne (Supabase Schedule + instrukcja n8n) z obejściem ograniczeń templatingu oraz ręczną weryfikacją logów.
@@ -212,6 +230,11 @@
   * Zaktualizowano funkcję do wersji 14 z konfiguracją auth wymuszającą użycie service_role
   * Funkcja powinna teraz działać poprawnie, wymaga testów w środowisku produkcyjnym
 
+- [2025-11-14] Naprawiono krytyczny błąd RangeError: Invalid time value w kalendarzu wizyt - dodano warunkowe sprawdzenie selectedDate przed użyciem funkcji format() i getDayName(), co eliminuje błędy przy przełączaniu dni w kalendarzu
+- [2025-11-14] Zaktualizowano funkcje isWorkingDay i isVacationDay - dodano walidację pustych/nieprawidłowych dat, funkcje zwracają false zamiast rzucać błędy, co zapewnia stabilność aplikacji
+- [2025-11-14] Dodano zabezpieczenie przed użyciem undefined selectedDate w JSX - wyświetlany jest komunikat "Wybierz datę" gdy selectedDate jest undefined, co poprawia UX i zapobiega błędom renderowania
+- [2025-11-14] System kalendarza wizyt działa stabilnie - wszystkie funkcje (wyświetlanie, dodawanie, edycja, usuwanie wizyt) działają poprawnie bez błędów w konsoli
+- [2025-11-14] Zaktualizowano progress.md z poprawną datą wykonania wszystkich zmian (2025-11-14) - dokumentacja jest teraz spójna i aktualna
 - [2024-12-19] Analiza ujawniła zaawansowany system zarządzania pacjentami i wizytami z pełną integracją Supabase
 - [2024-12-19] System ma solidną architekturę i intuicyjny UX, ale wymaga dodania autoryzacji
 - [2025-10-08] Przeprowadzono kompleksową optymalizację kalendarza wizyt - ujednolicono rozmiary, dodano automatyczne przełączanie widoków

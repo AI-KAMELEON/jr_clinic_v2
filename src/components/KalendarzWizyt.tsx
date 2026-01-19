@@ -91,6 +91,12 @@ interface GodzinyPracy {
 
 // Use WorkSchedule type from supabase.ts instead of local interface
 
+// Tablica z polskimi nazwami miesięcy w mianowniku (bez odmian)
+const polskieMiesiace = [
+  "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
+  "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"
+];
+
 const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date(),
@@ -462,7 +468,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const newCache = new Map(prev);
       // Remove cache entries that might contain this date
       const keysToRemove: string[] = [];
-      newCache.forEach((_, key: string) => {
+      newCache.forEach((_, key) => {
         // Remove day cache for this date
         if (key === `day-${date}`) {
           keysToRemove.push(key);
@@ -664,7 +670,12 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   };
 
   // Generate working hours for a specific date based on work schedule
-  const generateWorkingHours = (date: string, duration: '15min' | '30min' | 'custom' = '30min', customMinutes?: number, wizytyForDate?: WizytaWithPacjent[]): string[] => {
+  const generateWorkingHours = (
+    date: string, 
+    duration: '15min' | '30min' | 'custom' = '30min', 
+    customMinutes?: number,
+    visitsForDate?: WizytaWithPacjent[] // Opcjonalny parametr z wizytami dla danej daty
+  ): string[] => {
     const dateObj = new Date(date + "T00:00:00");
     const dayName = getDayName(dateObj);
     const daySchedule = planPracy[dayName];
@@ -674,14 +685,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     }
 
     // Get existing visits for this date (exclude cancelled visits)
-    // Jeśli wizytyForDate jest podane (nawet jeśli puste), użyj go bezpośrednio
+    // Jeśli visitsForDate jest podane (nawet jeśli puste), użyj go bezpośrednio
     // Nie używaj fallbacku do globalnego stanu, bo może nie zawierać wizyt dla tej daty
     let wizytyNaDzien: WizytaWithPacjent[];
-    if (wizytyForDate !== undefined) {
+    if (visitsForDate !== undefined) {
       // Wizyty są już przefiltrowane po dacie z mapy (w znajdzNajblizszeTerminy), tylko usuń anulowane
-      wizytyNaDzien = wizytyForDate.filter((w) => w.status && w.status !== 'odwolana');
+      wizytyNaDzien = visitsForDate.filter((w) => w.status && w.status !== 'odwolana');
     } else {
-      // Tylko jeśli wizytyForDate nie jest podane, użyj globalnego stanu i przefiltruj po dacie
+      // Tylko jeśli visitsForDate nie jest podane, użyj globalnego stanu i przefiltruj po dacie
       wizytyNaDzien = wizyty.filter((w) => isSameDate(w.data, date) && w.status && w.status !== 'odwolana');
     }
     
@@ -847,15 +858,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
   // Check if date is a working day
   const isWorkingDay = (date: string): boolean => {
+    if (!date || date.trim() === "") return false;
     const dateObj = new Date(date + "T00:00:00");
+    if (isNaN(dateObj.getTime())) return false;
     const dayName = getDayName(dateObj);
-    const daySchedule = planPracy[dayName];
-    return daySchedule?.aktywny ?? false; // Zwróć false jeśli nie istnieje
+    return planPracy[dayName]?.aktywny ?? false;
   };
 
   // Check if date is a vacation day
   const isVacationDay = (date: string): boolean => {
+    if (!date || date.trim() === "") return false;
     const dateObj = new Date(date + "T00:00:00");
+    if (isNaN(dateObj.getTime())) return false;
     return urlopy.some(urlop => {
       const startDate = new Date(urlop.data_od + "T00:00:00");
       const endDate = new Date(urlop.data_do + "T00:00:00");
@@ -900,11 +914,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
     const dateObj = new Date(date + "T00:00:00");
     const dayName = getDayName(dateObj);
-    const daySchedule = planPracy[dayName];
+    const workingHours = planPracy[dayName]?.godziny;
     
-    if (!daySchedule || !daySchedule.godziny) return false;
-    
-    const workingHours = daySchedule.godziny;
+    if (!workingHours) return false;
+
     const timeOnly = time.substring(0, 5); // Get HH:MM format
     return timeOnly >= workingHours.od && timeOnly <= workingHours.do;
   };
@@ -1227,7 +1240,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     const newEnd = nowaWizyta.godzina_do || addMinutesToTime(nowaWizyta.godzina, 30);
     
     const hasOverlap = wizyty.filter(w => w.status !== 'odwolana').some((wizyta) => {
-      if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+      // Użyj porównania dat zamiast stringów
+      if (!isSameDate(wizyta.data, nowaWizyta.data) || wizyta.id === selectedWizyta?.id) {
         return false;
       }
       
@@ -1262,7 +1276,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       visitDuration,
       isSlotAvailable,
       hasOverlap,
-      wizytyNaDzien: wizyty.filter(w => nowaWizyta.data && isSameDate(w.data, nowaWizyta.data) && w.status !== 'odwolana').length
+      wizytyNaDzien: wizyty.filter(w => isSameDate(w.data, nowaWizyta.data) && w.status !== 'odwolana').length
     });
     
     if (!isSlotAvailable) {
@@ -1272,7 +1286,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const todayStr = format(now, "yyyy-MM-dd");
       const currentTime = format(now, "HH:mm:ss");
       
-      if (nowaWizyta.data === todayStr && nowaWizyta.godzina <= currentTime) {
+      if (isSameDate(nowaWizyta.data, todayStr) && nowaWizyta.godzina <= currentTime) {
         console.log('❌ DEBUG - Wizyta w przeszłości');
         setError("❌ Nie można dodać wizyty w przeszłości");
       } else if (isVacationDay(nowaWizyta.data)) {
@@ -1430,7 +1444,15 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const getWizytyForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
     return wizyty
-      .filter((wizyta) => isSameDate(wizyta.data, dateStr))
+      .filter((wizyta) => {
+        // Użyj tej samej logiki co wizytyNaDzien (która działa!)
+        const wizytaDate = new Date(wizyta.data + "T00:00:00");
+        return (
+          wizytaDate.getDate() === date.getDate() &&
+          wizytaDate.getMonth() === date.getMonth() &&
+          wizytaDate.getFullYear() === date.getFullYear()
+        );
+      })
       .sort((a, b) => a.godzina.localeCompare(b.godzina));
   };
 
@@ -1497,6 +1519,14 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       console.error('Error fetching note for print:', err);
     }
     
+    // Debug: sprawdź dane wizyt przed drukowaniem
+    console.log('🔍 DEBUG - Wizyty do druku:', wizytyNaDzien.map(w => ({
+      pacjent: `${w.pacjenci?.imie} ${w.pacjenci?.nazwisko}`,
+      telefon: w.pacjenci?.telefon,
+      hasTelefon: !!w.pacjenci?.telefon,
+      pacjenci: w.pacjenci
+    })));
+    
     // Przygotuj zawartość do wydruku
     const printContent = `
       <!DOCTYPE html>
@@ -1526,22 +1556,34 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
             }
             .visit-item {
               display: flex;
-              justify-content: space-between;
-              align-items: center;
+              flex-direction: column;
               padding: 10px 0;
               border-bottom: 1px solid #eee;
             }
             .visit-time {
               font-weight: bold;
-              min-width: 80px;
+              margin-bottom: 8px;
             }
             .visit-patient {
               flex: 1;
+            }
+            .visit-patient-name {
+              display: flex;
+              align-items: center;
+              margin-bottom: 4px;
+            }
+            .visit-patient-name-text {
+              font-weight: 500;
+            }
+            .visit-phone {
+              color: #666;
+              font-size: 14px;
               margin-left: 20px;
             }
             .visit-type {
               color: #666;
               font-size: 14px;
+              margin-bottom: 4px;
             }
             .visit-notes {
               color: #333;
@@ -1608,17 +1650,16 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           ${wizytyNaDzien.length > 0 ? 
             wizytyNaDzien.map(wizyta => `
               <div class="visit-item">
-                <div class="visit-time">${wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)} - ${wizyta.godzina_do ? wizyta.godzina_do.substring(0, 5) : ''}</div>
+                <div class="visit-time">${wizyta.godzina_od ? wizyta.godzina_od.substring(0, 5) : wizyta.godzina.substring(0, 5)}${wizyta.godzina_do ? '-' + wizyta.godzina_do.substring(0, 5) : ''}</div>
                 <div class="visit-patient">
-                  <div>${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</div>
+                  <div class="visit-patient-name">
+                    <span class="visit-patient-name-text">${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}</span>
+                    ${wizyta.pacjenci.telefon && wizyta.pacjenci.telefon.trim() ? `<span class="visit-phone">tel: ${wizyta.pacjenci.telefon}</span>` : ''}
+                  </div>
                   <div class="visit-type">${wizyta.rodzaj}</div>
                   ${wizyta.notatki ? `
                     <div class="visit-notes">+ ${wizyta.notatki}</div>
                   ` : ''}
-                </div>
-                <div class="visit-status status-${wizyta.status || 'zaplanowana'}">
-                  ${wizyta.status === 'zaplanowana' || !wizyta.status ? 'Zaplanowana' : 
-                    wizyta.status === 'wykonana' ? 'Wykonana' : 'Odwołana'}
                 </div>
               </div>
             `).join('') : 
@@ -2042,6 +2083,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           <h3 className="text-sm font-medium text-gray-600">
                             Wybierz datę
                           </h3>
+                          <p className="text-xs text-gray-500">Wybierz dzień z kalendarza</p>
                         </div>
                       ) : isVacationDay(selectedDateStr) ? (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-2">
@@ -2056,7 +2098,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl })}
                           </h3>
                           <p className="text-xs text-green-600">
-                            Godziny pracy: {planPracy[getDayName(selectedDate)]?.godziny.od || "08:00"} - {planPracy[getDayName(selectedDate)]?.godziny.do || "17:00"}
+                            Godziny pracy: {planPracy[getDayName(selectedDate)]?.godziny?.od || "08:00"} - {planPracy[getDayName(selectedDate)]?.godziny?.do || "17:00"}
                           </p>
                         </div>
                       ) : (
@@ -2089,7 +2131,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {wizytyNaDzien.map((wizyta) => (
                               <Card
                                 key={wizyta.id}
-                                className={`border-l-4 ${getVisitBorderColor(wizyta.status || 'zaplanowana')} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor(wizyta.status || 'zaplanowana')}`}
+                                className={`border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)}`}
                                 onClick={() => handleWizytaClick(wizyta)}
                                 title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
                               >
@@ -2134,7 +2176,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana' as VisitStatus)}
                                               disabled={loading}
                                               className="text-green-600 hover:text-green-700"
                                               title="Oznacz wizytę jako wykonana"
@@ -2144,7 +2186,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana')}
+                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana' as VisitStatus)}
                                               disabled={loading}
                                               className="text-red-600 hover:text-red-700"
                                               title="Anuluj wizytę"
@@ -2159,7 +2201,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
+                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana' as VisitStatus)}
                                             disabled={loading}
                                             className="text-blue-600 hover:text-blue-700"
                                             title="Cofnij do statusu zaplanowana"
@@ -2345,7 +2387,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-medium">
-                        {selectedDate ? format(selectedDate, "MMMM yyyy", { locale: pl }) : "Wybierz datę"}
+                        {selectedDate 
+                          ? `${polskieMiesiace[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                          : "Wybierz datę"}
                       </h3>
                       <div className="flex items-center gap-2">
                         <Button
@@ -2679,7 +2723,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       if (!isAvailable) {
                         // Find conflicting visits (exclude cancelled visits)
                         const conflictingVisits = wizyty.filter(wizyta => wizyta.status !== 'odwolana').filter(wizyta => {
-                          if (wizyta.data !== nowaWizyta.data || wizyta.id === selectedWizyta?.id) {
+                          if (!isSameDate(wizyta.data, nowaWizyta.data) || wizyta.id === selectedWizyta?.id) {
                             return false;
                           }
                           
@@ -2694,7 +2738,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           const conflict = conflictingVisits[0];
                           const conflictStart = conflict.godzina_od || conflict.godzina;
                           const conflictEnd = conflict.godzina_do || addMinutesToTime(conflict.godzina, 30);
-                          setTimeSlotWarningMessage(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjent?.imie} ${conflict.pacjent?.nazwisko})`);
+                          setTimeSlotWarningMessage(`⚠️ Konflikt z wizytą ${conflictStart.substring(0, 5)}-${conflictEnd.substring(0, 5)} (${conflict.pacjenci?.imie} ${conflict.pacjenci?.nazwisko})`);
                           setTimeSlotWarningDialog(true);
                         } else {
                           setTimeSlotWarningMessage('⚠️ Ten termin nie jest dostępny');
@@ -2731,7 +2775,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                     return allSlots.map((slot) => {
                       const todayStr = format(new Date(), "yyyy-MM-dd");
                       const currentTime = format(new Date(), "HH:mm:ss");
-                      const isPast = nowaWizyta.data === todayStr && slot.time <= currentTime;
+                      const isPast = isSameDate(nowaWizyta.data, todayStr) && slot.time <= currentTime;
                       const isVacation = isVacationDay(nowaWizyta.data);
                       const isWorking = isWorkingDay(nowaWizyta.data);
                       
