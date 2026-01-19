@@ -1,5 +1,12 @@
 # Postępy
 
+- [2026-01-01] Naprawiono nazwy miesięcy w widoku miesiąca kalendarza - zmieniono z dopełniacza (stycznia, lutego) na mianownik (styczeń, luty) używając tablicy polskieMiesiace
+- [2026-01-01] Utworzono workflow GitHub Actions dla automatycznego deploy na GitHub Pages (.github/workflows/deploy.yml)
+- [2026-01-01] Skonfigurowano GitHub Secrets (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) dla build procesu
+- [2026-01-01] Naprawiono wszystkie błędy TypeScript blokujące build: pacjent→pacjenci, asercje typów VisitStatus, brakujące pola godzina_od/godzina_do
+- [2026-01-01] Dodano definicje typów dla import.meta.env w vite-env.d.ts (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+- [2026-01-01] Zmieniono tytuł strony z "Vite + React + TS" na "JR CLINIC" w index.html
+- [2026-01-01] Zmieniono favicon z vite.svg na logo-jr.svg w index.html
 - [2025-11-14] Naprawiono problem z wyświetlaniem wizyt na styczeń i luty 2026 - wizyty były w bazie, ale nie były widoczne w kalendarzu
 - [2025-11-14] Dodano funkcję pomocniczą isSameDate do niezawodnego porównywania dat (zamiast porównywania stringów)
 - [2025-11-14] Poprawiono funkcję getWizytyForDate - używa teraz porównania dat zamiast stringów dla poprawnego wyświetlania wizyt
@@ -204,6 +211,20 @@
 - [2025-10-02] Wydruki profesjonalnie sformatowane z logo kliniki, datami, statusami wizyt i notatkami dziennymi
 
 # Dalsze zadania
+
+- [2026-01-01] Wypushować zmiany do GitHub i sprawdzić czy workflow deploy przechodzi pomyślnie
+- [2026-01-01] Skonfigurować custom domain jr-clinic.visitella w GitHub Pages Settings
+- [2026-01-01] Skonfigurować rekordy DNS dla domeny jr-clinic.visitella (rekordy A lub CNAME)
+- [2026-01-01] Zweryfikować działanie aplikacji na GitHub Pages po deploy
+- [2026-01-01] Opcjonalnie: dodać logikę obliczania godzina_do (+30min) w KartaPacjenta.tsx zamiast używania tej samej wartości co godzina_od
+
+# Dalsze zadania
+
+- [2026-01-01] Wypushować zmiany do GitHub i sprawdzić czy workflow deploy przechodzi pomyślnie
+- [2026-01-01] Skonfigurować custom domain jr-clinic.visitella w GitHub Pages Settings
+- [2026-01-01] Skonfigurować rekordy DNS dla domeny jr-clinic.visitella (rekordy A lub CNAME)
+- [2026-01-01] Zweryfikować działanie aplikacji na GitHub Pages po deploy
+- [2026-01-01] Opcjonalnie: dodać logikę obliczania godzina_do (+30min) w KartaPacjenta.tsx zamiast używania tej samej wartości co godzina_od
 
 ## Faza 1: SaaS MVP (3 miesiące)
 - [2025-10-08] Implementacja multi-tenant database (Supabase)
