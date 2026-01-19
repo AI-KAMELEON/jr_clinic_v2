@@ -469,6 +469,23 @@ ALTER TABLE "public"."wizyty" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."notatki_dzienne" ENABLE ROW LEVEL SECURITY;
 
 
+-- Add service role policies for Edge Functions
+CREATE POLICY "Service role full access to wizyty" ON "public"."wizyty"
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "Service role full access to pacjenci" ON "public"."pacjenci"
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "Service role full access to sms_logs" ON "public"."sms_logs"
+TO service_role
+USING (true)
+WITH CHECK (true);
+
+
 
 
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";

@@ -16,10 +16,13 @@ import { AdminManagement } from "./AdminManagement";
 import MessagesPage from "./MessagesPage";
 import DigitalClock from "./DigitalClock";
 import DailyNoteEditor from "./DailyNoteEditor";
+import CallbackRequestsWidget from "./CallbackRequestsWidget";
 import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Settings, MessageSquare } from "lucide-react";
+import { AlertCircle, Settings, MessageSquare, Mic, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { AgentConfigPanel } from "./AgentConfigPanel";
+import EmailClient from "./EmailClient";
 
 const Home = () => {
   const { user, signOut } = useAuth();
@@ -470,6 +473,22 @@ const Home = () => {
               <MessageSquare className="mr-2 h-4 w-4" />
               Wiadomości
             </Button>
+            <Button
+              variant={activeTab === "agent-glosowy" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("agent-glosowy")}
+            >
+              <Mic className="mr-2 h-4 w-4" />
+              Agent głosowy
+            </Button>
+            <Button
+              variant={activeTab === "email" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("email")}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              Email
+            </Button>
             {selectedPatientId && (
               <Button
                 variant={activeTab === "karta-pacjenta" ? "default" : "ghost"}
@@ -546,11 +565,14 @@ const Home = () => {
                 </div>
               </div>
 
-              <DailyNoteEditor 
-                date={new Date().toISOString().split('T')[0]} 
-                variant="dashboard"
-                className="mb-6"
-              />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <DailyNoteEditor 
+                  date={new Date().toISOString().split('T')[0]} 
+                  variant="dashboard"
+                  className="h-full"
+                />
+                <CallbackRequestsWidget className="h-full" />
+              </div>
 
               <Card>
                 <CardHeader>
@@ -694,6 +716,14 @@ const Home = () => {
 
             <TabsContent value="wiadomosci">
               <MessagesPage />
+            </TabsContent>
+
+            <TabsContent value="agent-glosowy">
+              <AgentConfigPanel />
+            </TabsContent>
+
+            <TabsContent value="email">
+              <EmailClient />
             </TabsContent>
 
             <TabsContent value="karta-pacjenta">
