@@ -133,6 +133,13 @@
 - [2025-10-12] Poprawiono komunikaty w formularzu dodawania wizyt - precyzyjne alerty dla dni wolnych od pracy zamiast ogólnego "Ten termin nie jest dostępny"
 - [2025-10-12] Zastąpiono banner timeSlotWarning eleganckim AlertDialog w KalendarzWizyt - wyskakujące okienko na środku ekranu dla ostrzeżeń o terminach
 - [2025-10-12] Naprawiono funkcję handleSaveWizyta - zastąpiono wszystkie setError() AlertDialog dla dni wolnych od pracy i konfliktów terminów
+- [2026-02-28] Zdiagnozowano i naprawiono krytyczny błąd limitu 1000 rekordów w panelu pacjentów - Supabase domyślnie obcina wyniki do 1000 wierszy
+- [2026-02-28] Przepisano PacjenciPanel.tsx - wyszukiwanie przeniesione z przeglądarki na serwer (Supabase .ilike() + .or())
+- [2026-02-28] Zaimplementowano infinite scroll z IntersectionObserver - lista doładowuje kolejne 100 rekordów po przewinięciu do końca
+- [2026-02-28] Dodano debounce 400ms dla pola wyszukiwania - zapytanie wysyłane po 400ms przerwy w pisaniu
+- [2026-02-28] Wyszukiwanie obsługuje: jedną frazę (imię lub nazwisko lub telefon) oraz dwie frazy (imię + nazwisko)
+- [2026-02-28] Po dodaniu nowego pacjenta lista odświeżana jest od początku z serwera - pacjent pojawia się we właściwym miejscu alfabetycznym
+- [2026-02-28] Po edycji/usunięciu pacjenta stan aktualizowany jest lokalnie bez przeładowania całej listy
 
 # Podsumowanie przed zakończeniem pracy
 

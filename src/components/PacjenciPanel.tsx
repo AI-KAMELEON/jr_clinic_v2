@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, Plus, Edit, Trash2, Filter } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Filter, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -43,6 +43,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { validatePESEL, extractDateFromPESEL, formatPESEL } from "@/lib/utils";
 
+const PAGE_SIZE = 100;
 
 interface PacjenciPanelProps {
   onPatientSelect?: (patientId: string) => void;
@@ -56,6 +57,7 @@ const PacjenciPanel = ({
   onNameUsed,
 }: PacjenciPanelProps = {}) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentPacjent, setCurrentPacjent] = useState<Pacjent | null>(null);
@@ -66,35 +68,116 @@ const PacjenciPanel = ({
   }>({ imie: "", nazwisko: "" });
   const [pacjenci, setPacjenci] = useState<Pacjent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pacjentToDelete, setPacjentToDelete] = useState<Pacjent | null>(null);
   const [duplicatePeselDialog, setDuplicatePeselDialog] = useState(false);
   const [duplicatePeselMessage, setDuplicatePeselMessage] = useState('');
 
-  // Fetch pacjenci from database
-  const fetchPacjenci = async () => {
-    try {
+  // Ref for infinite scroll sentinel element
+  const sentinelRef = useRef<HTMLTableRowElement>(null);
+
+  // Debounce search input — sends query to server after 400ms pause
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset list when search or sort changes
+  useEffect(() => {
+    setPacjenci([]);
+    setPage(0);
+    setHasMore(true);
+  }, [debouncedSearch, sortBy]);
+
+  // Core fetch function — server-side search + pagination
+  const fetchPacjenci = useCallback(async (pageNum: number, search: string, sort: string, append: boolean) => {
+    if (pageNum === 0) {
       setLoading(true);
-      const { data, error } = await supabase
+    } else {
+      setLoadingMore(true);
+    }
+    setError(null);
+
+    try {
+      const from = pageNum * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let query = supabase
         .from("pacjenci")
         .select("*")
-        .order("nazwisko");
+        .order(sort)
+        .range(from, to);
 
-      if (error) throw error;
-      setPacjenci(data || []);
-    } catch (err) {
+      if (search.trim()) {
+        const term = search.trim();
+        const parts = term.split(" ").filter(Boolean);
+
+        if (parts.length >= 2) {
+          // "Jan Kowalski" — szukaj po imieniu I nazwisku
+          query = query
+            .ilike("imie", `%${parts[0]}%`)
+            .ilike("nazwisko", `%${parts[1]}%`);
+        } else {
+          // Jedna fraza — szukaj po imieniu, nazwisku lub telefonie
+          query = query.or(
+            `imie.ilike.%${term}%,nazwisko.ilike.%${term}%,telefon.ilike.%${term}%`
+          );
+        }
+      }
+
+      const { data, error: fetchError } = await query;
+
+      if (fetchError) throw fetchError;
+
+      const results = data || [];
+      if (append) {
+        setPacjenci(prev => [...prev, ...results]);
+      } else {
+        setPacjenci(results);
+      }
+      setHasMore(results.length === PAGE_SIZE);
+    } catch (err: any) {
       console.error("Error fetching pacjenci:", err);
       setError("Błąd podczas pobierania listy pacjentów");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
-
-  // Load pacjenci on component mount
-  useEffect(() => {
-    fetchPacjenci();
   }, []);
+
+  // Initial load and on search/sort change
+  useEffect(() => {
+    fetchPacjenci(0, debouncedSearch, sortBy, false);
+  }, [debouncedSearch, sortBy, fetchPacjenci]);
+
+  // Load next page when page state increments (triggered by IntersectionObserver)
+  useEffect(() => {
+    if (page === 0) return;
+    fetchPacjenci(page, debouncedSearch, sortBy, true);
+  }, [page, debouncedSearch, sortBy, fetchPacjenci]);
+
+  // Infinite scroll — observe the sentinel row at the bottom of the table
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          setPage(prev => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading]);
 
   const handleAddPacjent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -103,7 +186,6 @@ const PacjenciPanel = ({
     const pesel = formData.get("pesel") as string;
     const brakPesel = formData.get("brakPesel") === "on";
     
-    // Walidacja PESEL
     if (!brakPesel && pesel && !validatePESEL(pesel)) {
       setError("Nieprawidłowy numer PESEL");
       return;
@@ -112,7 +194,6 @@ const PacjenciPanel = ({
     try {
       setLoading(true);
       
-      // Sprawdź czy pacjent o takim PESEL już istnieje
       if (pesel && !brakPesel) {
         const { data: existingPatient, error: checkError } = await supabase
           .from("pacjenci")
@@ -120,7 +201,7 @@ const PacjenciPanel = ({
           .eq("pesel", pesel)
           .single();
         
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (checkError && checkError.code !== 'PGRST116') {
           throw checkError;
         }
         
@@ -131,7 +212,6 @@ const PacjenciPanel = ({
         }
       }
       
-      // Przygotuj dane do wstawienia
       const insertData: any = {
         imie: formData.get("imie") as string,
         nazwisko: formData.get("nazwisko") as string,
@@ -141,8 +221,6 @@ const PacjenciPanel = ({
         email: (formData.get("email") as string) || null,
       };
 
-      // Dodaj PESEL tylko jeśli kolumny istnieją
-      // Sprawdź czy kolumny PESEL istnieją w bazie
       try {
         if (pesel && !brakPesel) {
           insertData.pesel = pesel;
@@ -153,10 +231,7 @@ const PacjenciPanel = ({
         }
       } catch (peselError) {
         console.log("PESEL columns may not exist, skipping PESEL data");
-        // Nie dodawaj PESEL jeśli kolumny nie istnieją
       }
-
-      console.log("Inserting data:", insertData);
 
       const { data, error } = await supabase
         .from("pacjenci")
@@ -166,28 +241,21 @@ const PacjenciPanel = ({
 
       if (error) throw error;
       
-      setPacjenci([...pacjenci, data]);
+      // Odśwież listę od początku żeby nowy pacjent pojawił się w odpowiednim miejscu
+      setPacjenci([]);
+      setPage(0);
+      setHasMore(true);
+      fetchPacjenci(0, debouncedSearch, sortBy, false);
+
       setIsAddDialogOpen(false);
       setInitialFormData({ imie: "", nazwisko: "" });
       
-      // Clear the prefilled name after use
       if (onNameUsed) {
         onNameUsed();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error adding pacjent:", err);
-      console.error("Form data:", {
-        imie: formData.get("imie"),
-        nazwisko: formData.get("nazwisko"),
-        telefon: formData.get("telefon"),
-        email: formData.get("email"),
-        adres: formData.get("adres"),
-        pesel: pesel,
-        brakPesel: brakPesel,
-        notatki: formData.get("notatki")
-      });
       
-      // Sprawdź czy to błąd duplikatu PESEL
       if (err.code === '23505' && err.message.includes('idx_pacjenci_pesel_unique')) {
         setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych`);
         setDuplicatePeselDialog(true);
@@ -208,7 +276,6 @@ const PacjenciPanel = ({
     const pesel = formData.get("pesel") as string;
     const brakPesel = formData.get("brakPesel") === "on";
     
-    // Walidacja PESEL
     if (!brakPesel && pesel && !validatePESEL(pesel)) {
       setError("Nieprawidłowy numer PESEL");
       return;
@@ -217,16 +284,15 @@ const PacjenciPanel = ({
     try {
       setLoading(true);
       
-      // Sprawdź czy pacjent o takim PESEL już istnieje (ale nie ten sam pacjent)
       if (pesel && !brakPesel) {
         const { data: existingPatient, error: checkError } = await supabase
           .from("pacjenci")
           .select("id, imie, nazwisko")
           .eq("pesel", pesel)
-          .neq("id", currentPacjent.id) // Wyklucz aktualnie edytowanego pacjenta
+          .neq("id", currentPacjent.id)
           .single();
         
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (checkError && checkError.code !== 'PGRST116') {
           throw checkError;
         }
         
@@ -255,15 +321,13 @@ const PacjenciPanel = ({
 
       if (error) throw error;
 
-      setPacjenci(
-        pacjenci.map((p) => (p.id === currentPacjent.id ? data : p)),
-      );
+      // Zaktualizuj rekord lokalnie bez przeładowania całej listy
+      setPacjenci(prev => prev.map(p => p.id === currentPacjent.id ? data : p));
       setIsEditDialogOpen(false);
       setCurrentPacjent(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating pacjent:", err);
       
-      // Sprawdź czy to błąd duplikatu PESEL
       if (err.code === '23505' && err.message.includes('idx_pacjenci_pesel_unique')) {
         setDuplicatePeselMessage(`Pacjent o numerze PESEL ${pesel} już istnieje w bazie danych`);
         setDuplicatePeselDialog(true);
@@ -292,7 +356,8 @@ const PacjenciPanel = ({
 
       if (error) throw error;
 
-      setPacjenci(pacjenci.filter((p) => p.id !== pacjentToDelete.id));
+      // Usuń lokalnie bez przeładowania listy
+      setPacjenci(prev => prev.filter(p => p.id !== pacjentToDelete.id));
       setDeleteDialogOpen(false);
       setPacjentToDelete(null);
     } catch (err) {
@@ -308,32 +373,13 @@ const PacjenciPanel = ({
     setIsEditDialogOpen(true);
   };
 
-  const filteredPacjenci = pacjenci
-    .filter(
-      (pacjent) =>
-        pacjent.imie.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pacjent.nazwisko.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pacjent.telefon.includes(searchTerm),
-    )
-    .sort((a, b) => {
-      if (sortBy === "imie") return a.imie.localeCompare(b.imie);
-      if (sortBy === "nazwisko") return a.nazwisko.localeCompare(b.nazwisko);
-      if (sortBy === "telefon") return a.telefon.localeCompare(b.telefon);
-      return 0;
-    });
-
   // Handle prefilled name from appointment scheduling
   React.useEffect(() => {
-    console.log("PacjenciPanel received prefilledName:", prefilledName);
     if (prefilledName && prefilledName.trim()) {
       const nameParts = prefilledName.trim().split(" ");
       const imie = nameParts[0] || "";
       const nazwisko = nameParts.slice(1).join(" ") || "";
-
-      console.log("Setting initial form data:", { imie, nazwisko });
       setInitialFormData({ imie, nazwisko });
-
-      // Open the add dialog immediately
       setIsAddDialogOpen(true);
     }
   }, [prefilledName]);
@@ -358,7 +404,7 @@ const PacjenciPanel = ({
             <div className="relative w-full md:w-1/3">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Szukaj pacjenta..."
+                placeholder="Szukaj pacjenta (imię, nazwisko, telefon)..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -488,15 +534,11 @@ const PacjenciPanel = ({
                             maxLength={11}
                             className="font-mono"
                             onChange={(e) => {
-                              // Formatuj PESEL podczas wpisywania
                               const value = e.target.value.replace(/\D/g, '');
                               e.target.value = value;
-                              
-                              // Walidacja w czasie rzeczywistym
                               if (value.length === 11) {
                                 const isValid = validatePESEL(value);
                                 const extractedDate = extractDateFromPESEL(value);
-                                
                                 if (isValid && extractedDate) {
                                   e.target.style.borderColor = '#10b981';
                                   e.target.title = `Prawidłowy PESEL. Data urodzenia: ${extractedDate.toLocaleDateString('pl-PL')}`;
@@ -549,7 +591,7 @@ const PacjenciPanel = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {loading && pacjenci.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={5}
@@ -558,58 +600,79 @@ const PacjenciPanel = ({
                       Ładowanie pacjentów...
                     </TableCell>
                   </TableRow>
-                ) : filteredPacjenci.length > 0 ? (
-                  filteredPacjenci.map((pacjent) => (
-                    <TableRow
-                      key={pacjent.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => onPatientSelect?.(pacjent.id)}
-                    >
-                      <TableCell>{pacjent.imie}</TableCell>
-                      <TableCell>{pacjent.nazwisko}</TableCell>
-                      <TableCell>{pacjent.telefon}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {pacjent.notatki || "Brak notatek"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(pacjent);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletePacjent(pacjent);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
+                ) : pacjenci.length > 0 ? (
+                  <>
+                    {pacjenci.map((pacjent) => (
+                      <TableRow
+                        key={pacjent.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => onPatientSelect?.(pacjent.id)}
+                      >
+                        <TableCell>{pacjent.imie}</TableCell>
+                        <TableCell>{pacjent.nazwisko}</TableCell>
+                        <TableCell>{pacjent.telefon}</TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {pacjent.notatki || "Brak notatek"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(pacjent);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePacjent(pacjent);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Sentinel row — IntersectionObserver target */}
+                    <TableRow ref={sentinelRef} className="h-1 border-0">
+                      <TableCell colSpan={5} className="p-0">
+                        {loadingMore && (
+                          <div className="flex justify-center items-center py-4 gap-2 text-muted-foreground text-sm">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Ładowanie kolejnych pacjentów...
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))
+                  </>
                 ) : (
                   <TableRow>
                     <TableCell
                       colSpan={5}
                       className="text-center py-6 text-muted-foreground"
                     >
-                      Nie znaleziono pacjentów
+                      {debouncedSearch
+                        ? `Nie znaleziono pacjentów dla frazy "${debouncedSearch}"`
+                        : "Nie znaleziono pacjentów"}
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {!hasMore && pacjenci.length > 0 && (
+            <p className="text-center text-sm text-muted-foreground mt-3">
+              Wyświetlono wszystkich {pacjenci.length} pacjentów
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -724,15 +787,11 @@ const PacjenciPanel = ({
                       defaultValue={currentPacjent?.pesel || ""}
                       disabled={currentPacjent?.brak_pesel || false}
                       onChange={(e) => {
-                        // Formatuj PESEL podczas wpisywania
                         const value = e.target.value.replace(/\D/g, '');
                         e.target.value = value;
-                        
-                        // Walidacja w czasie rzeczywistym
                         if (value.length === 11) {
                           const isValid = validatePESEL(value);
                           const extractedDate = extractDateFromPESEL(value);
-                          
                           if (isValid && extractedDate) {
                             e.target.style.borderColor = '#10b981';
                             e.target.title = `Prawidłowy PESEL. Data urodzenia: ${extractedDate.toLocaleDateString('pl-PL')}`;
