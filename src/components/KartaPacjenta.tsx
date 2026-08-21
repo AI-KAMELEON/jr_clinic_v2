@@ -41,7 +41,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon, AlertTriangle, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { validatePESEL, extractDateFromPESEL, formatPESEL } from "@/lib/utils";
@@ -56,6 +63,24 @@ interface Wizyta {
 }
 
 
+interface WizytaCitoRecord {
+  id: string;
+  powod: string;
+  notatki: string;
+  status: string;
+  kolejnosc: number;
+  created_at: string | null;
+}
+
+interface WizytaDodatkowaRecord {
+  id: string;
+  data: string;
+  rodzaj: string;
+  notatki: string;
+  status: string;
+  created_at: string | null;
+}
+
 interface Pacjent {
   id: string;
   imie: string;
@@ -66,8 +91,17 @@ interface Pacjent {
   pesel: string | null;
   brakPesel: boolean;
   wizyty: Wizyta[];
+  wizytyCito: WizytaCitoRecord[];
+  wizytyDodatkowe: WizytaDodatkowaRecord[];
   notatkiOgolne?: string;
 }
+
+const RODZAJE_DODATKOWE = [
+  "Zdjęcie gumek",
+  "Zdjęcie RTG",
+  "Kontrola aparatu",
+  "Inne",
+];
 
 const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [pacjent, setPacjent] = useState<Pacjent | null>(null);
@@ -105,6 +139,18 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             status: (wizyta.status || 'zaplanowana') as VisitStatus
           })) || [];
 
+          const { data: citoData } = await supabase
+            .from('wizyty_cito')
+            .select('*')
+            .eq('pacjent_id', pacjentId)
+            .order('created_at', { ascending: false });
+
+          const { data: dodatkoweData } = await supabase
+            .from('wizyty_dodatkowe')
+            .select('*')
+            .eq('pacjent_id', pacjentId)
+            .order('data', { ascending: false });
+
           setPacjent({
             id: data.id,
             imie: data.imie,
@@ -116,6 +162,22 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             brakPesel: data.brak_pesel || false,
             notatkiOgolne: data.notatki || '',
             wizyty: wizyty,
+            wizytyCito: (citoData || []).map((c) => ({
+              id: c.id,
+              powod: c.powod || '',
+              notatki: c.notatki || '',
+              status: c.status,
+              kolejnosc: c.kolejnosc,
+              created_at: c.created_at,
+            })),
+            wizytyDodatkowe: (dodatkoweData || []).map((d) => ({
+              id: d.id,
+              data: d.data,
+              rodzaj: d.rodzaj,
+              notatki: d.notatki || '',
+              status: d.status,
+              created_at: d.created_at,
+            })),
           });
         }
       } catch (error) {
@@ -136,6 +198,15 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
   const [duplicatePeselDialog, setDuplicatePeselDialog] = useState(false);
   const [duplicatePeselMessage, setDuplicatePeselMessage] = useState('');
+  const [citoDialogOpen, setCitoDialogOpen] = useState(false);
+  const [dodatkowaDialogOpen, setDodatkowaDialogOpen] = useState(false);
+  const [citoDuplicateDialog, setCitoDuplicateDialog] = useState(false);
+  const [formCito, setFormCito] = useState({ powod: '', notatki: '' });
+  const [formDodatkowa, setFormDodatkowa] = useState({
+    data: format(new Date(), 'yyyy-MM-dd'),
+    rodzaj: RODZAJE_DODATKOWE[0],
+    notatki: '',
+  });
 
   // Get visit background color based on status
   const getVisitBackgroundColor = (status?: VisitStatus): string => {
@@ -422,22 +493,149 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     }
   };
 
+  const hasActiveCito = pacjent.wizytyCito.some((w) => w.status === 'oczekujaca');
+
+  const handleOznaczCito = async () => {
+    if (hasActiveCito) {
+      setCitoDuplicateDialog(true);
+      return;
+    }
+    setFormCito({ powod: '', notatki: '' });
+    setCitoDialogOpen(true);
+  };
+
+  const handleCitoSubmit = async () => {
+    try {
+      const { data: existing } = await supabase
+        .from('wizyty_cito')
+        .select('id')
+        .eq('pacjent_id', pacjentId)
+        .eq('status', 'oczekujaca')
+        .maybeSingle();
+
+      if (existing) {
+        setCitoDuplicateDialog(true);
+        setCitoDialogOpen(false);
+        return;
+      }
+
+      const { data: maxOrderData } = await supabase
+        .from('wizyty_cito')
+        .select('kolejnosc')
+        .eq('status', 'oczekujaca')
+        .order('kolejnosc', { ascending: false })
+        .limit(1);
+
+      const nextOrder = (maxOrderData?.[0]?.kolejnosc || 0) + 1;
+
+      const { data: newCito, error } = await supabase
+        .from('wizyty_cito')
+        .insert({
+          pacjent_id: pacjentId,
+          kolejnosc: nextOrder,
+          powod: formCito.powod || null,
+          notatki: formCito.notatki || null,
+          status: 'oczekujaca',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setPacjent({
+        ...pacjent,
+        wizytyCito: [
+          {
+            id: newCito.id,
+            powod: formCito.powod,
+            notatki: formCito.notatki,
+            status: 'oczekujaca',
+            kolejnosc: nextOrder,
+            created_at: newCito.created_at,
+          },
+          ...pacjent.wizytyCito,
+        ],
+      });
+      setCitoDialogOpen(false);
+      setFormCito({ powod: '', notatki: '' });
+    } catch (error) {
+      console.error('Error adding cito visit:', error);
+      alert('Błąd podczas dodawania do listy Cito');
+    }
+  };
+
+  const handleDodatkowaWizyta = () => {
+    setFormDodatkowa({
+      data: format(new Date(), 'yyyy-MM-dd'),
+      rodzaj: RODZAJE_DODATKOWE[0],
+      notatki: '',
+    });
+    setDodatkowaDialogOpen(true);
+  };
+
+  const handleDodatkowaSubmit = async () => {
+    try {
+      const { data: newDodatkowa, error } = await supabase
+        .from('wizyty_dodatkowe')
+        .insert({
+          pacjent_id: pacjentId,
+          data: formDodatkowa.data,
+          rodzaj: formDodatkowa.rodzaj,
+          notatki: formDodatkowa.notatki || null,
+          status: 'zaplanowana',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setPacjent({
+        ...pacjent,
+        wizytyDodatkowe: [
+          {
+            id: newDodatkowa.id,
+            data: formDodatkowa.data,
+            rodzaj: formDodatkowa.rodzaj,
+            notatki: formDodatkowa.notatki,
+            status: 'zaplanowana',
+            created_at: newDodatkowa.created_at,
+          },
+          ...pacjent.wizytyDodatkowe,
+        ],
+      });
+      setDodatkowaDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding additional visit:', error);
+      alert('Błąd podczas dodawania wizyty dodatkowej');
+    }
+  };
+
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <h1 className="text-3xl font-bold text-gray-800">
           Karta Pacjenta: {pacjent.imie} {pacjent.nazwisko}
         </h1>
-        <Button onClick={() => setEdytujDane(true)} variant="outline">
-          <PencilIcon className="h-4 w-4 mr-2" /> Edytuj dane
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleOznaczCito} variant="outline" className="text-orange-600 border-orange-300">
+            <AlertTriangle className="h-4 w-4 mr-2" /> Oznacz jako Cito
+          </Button>
+          <Button onClick={handleDodatkowaWizyta} variant="outline">
+            <Clock className="h-4 w-4 mr-2" /> Wizyta dodatkowa
+          </Button>
+          <Button onClick={() => setEdytujDane(true)} variant="outline">
+            <PencilIcon className="h-4 w-4 mr-2" /> Edytuj dane
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="dane" className="w-full">
-        <TabsList className="grid grid-cols-2 mb-6">
+        <TabsList className="grid grid-cols-4 mb-6">
           <TabsTrigger value="dane">Dane osobowe</TabsTrigger>
           <TabsTrigger value="wizyty">Historia wizyt</TabsTrigger>
+          <TabsTrigger value="cito">Wizyty Cito</TabsTrigger>
+          <TabsTrigger value="dodatkowe">Wizyty dodatkowe</TabsTrigger>
         </TabsList>
 
         {/* Zakładka z danymi osobowymi */}
@@ -574,6 +772,101 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                           className="text-center py-4 text-muted-foreground"
                         >
                           Brak historii wizyt
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cito">
+          <Card>
+            <CardHeader>
+              <CardTitle>Wizyty Cito</CardTitle>
+              <CardDescription>Historia wpisów pilnych dla tego pacjenta</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] w-full pr-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data dodania</TableHead>
+                      <TableHead>Pozycja</TableHead>
+                      <TableHead>Powód</TableHead>
+                      <TableHead>Notatki</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pacjent.wizytyCito.length > 0 ? (
+                      pacjent.wizytyCito.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell>
+                            {w.created_at
+                              ? format(new Date(w.created_at), "dd.MM.yyyy HH:mm", { locale: pl })
+                              : "-"}
+                          </TableCell>
+                          <TableCell>{w.kolejnosc}</TableCell>
+                          <TableCell>{w.powod || "-"}</TableCell>
+                          <TableCell>{w.notatki || "-"}</TableCell>
+                          <TableCell>{w.status}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                          Brak wpisów Cito
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="dodatkowe">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Wizyty dodatkowe</CardTitle>
+                <CardDescription>Krótkie wizyty niezależne od kalendarza</CardDescription>
+              </div>
+              <Button onClick={handleDodatkowaWizyta}>
+                <PlusIcon className="h-4 w-4 mr-2" /> Dodaj wizytę dodatkową
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] w-full pr-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Rodzaj</TableHead>
+                      <TableHead>Notatki</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pacjent.wizytyDodatkowe.length > 0 ? (
+                      pacjent.wizytyDodatkowe.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell>
+                            {format(new Date(w.data + "T00:00:00"), "dd.MM.yyyy", { locale: pl })}
+                          </TableCell>
+                          <TableCell>{w.rodzaj}</TableCell>
+                          <TableCell>{w.notatki || "-"}</TableCell>
+                          <TableCell>{w.status}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                          Brak wizyt dodatkowych
                         </TableCell>
                       </TableRow>
                     )}
@@ -814,6 +1107,108 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             <AlertDialogAction onClick={() => setDuplicatePeselDialog(false)}>
               Rozumiem
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={citoDialogOpen} onOpenChange={setCitoDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Oznacz jako Cito</DialogTitle>
+            <DialogDescription>
+              Pacjent trafi na listę pilnych wizyt (nie blokuje kalendarza)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="powod">Powód</Label>
+              <Input
+                id="powod"
+                value={formCito.powod}
+                onChange={(e) => setFormCito({ ...formCito, powod: e.target.value })}
+                placeholder="np. ból zęba"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cito-notatki">Notatki</Label>
+              <Textarea
+                id="cito-notatki"
+                value={formCito.notatki}
+                onChange={(e) => setFormCito({ ...formCito, notatki: e.target.value })}
+                placeholder="Dodatkowe uwagi..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCitoDialogOpen(false)}>Anuluj</Button>
+            <Button onClick={handleCitoSubmit}>Dodaj do Cito</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dodatkowaDialogOpen} onOpenChange={setDodatkowaDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Wizyta dodatkowa</DialogTitle>
+            <DialogDescription>
+              Krótka wizyta widoczna w panelu wizyt dodatkowych (nie blokuje kalendarza)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="dod-data">Data</Label>
+              <Input
+                id="dod-data"
+                type="date"
+                value={formDodatkowa.data}
+                onChange={(e) => setFormDodatkowa({ ...formDodatkowa, data: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Rodzaj</Label>
+              <Select
+                value={formDodatkowa.rodzaj}
+                onValueChange={(value) => setFormDodatkowa({ ...formDodatkowa, rodzaj: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RODZAJE_DODATKOWE.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dod-notatki">Notatki</Label>
+              <Textarea
+                id="dod-notatki"
+                value={formDodatkowa.notatki}
+                onChange={(e) => setFormDodatkowa({ ...formDodatkowa, notatki: e.target.value })}
+                placeholder="Opcjonalne uwagi..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDodatkowaDialogOpen(false)}>Anuluj</Button>
+            <Button onClick={handleDodatkowaSubmit}>Dodaj</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={citoDuplicateDialog} onOpenChange={setCitoDuplicateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pacjent już na liście Cito</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ten pacjent ma już aktywny wpis na liście wizyt Cito.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCitoDuplicateDialog(false)}>Rozumiem</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

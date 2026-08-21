@@ -34,6 +34,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import WizytyDodatkowePanel from "./WizytyDodatkowePanel";
 import DailyNoteEditor from "./DailyNoteEditor";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -96,6 +97,9 @@ const polskieMiesiace = [
   "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
   "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"
 ];
+const MONTH_PREVIEW_START_MINUTES = 8 * 60;
+const MONTH_PREVIEW_END_MINUTES = 20 * 60;
+const MONTH_PREVIEW_SLOT_MINUTES = 15;
 
 const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
@@ -108,6 +112,9 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const [isWorkScheduleDialogOpen, setIsWorkScheduleDialogOpen] =
     useState(false);
   const [isVacationDialogOpen, setIsVacationDialogOpen] = useState(false);
+  const [isMonthPreviewOpen, setIsMonthPreviewOpen] = useState(false);
+  const [monthPreviewDate, setMonthPreviewDate] = useState<Date>(new Date());
+  const [highlightedWizytaId, setHighlightedWizytaId] = useState<string | null>(null);
   const [selectedWizyta, setSelectedWizyta] =
     useState<WizytaWithPacjent | null>(null);
   const [selectedUrlop, setSelectedUrlop] = useState<Urlop | null>(null);
@@ -233,6 +240,59 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     "GAZ",
     "KONSULTACJA",
   ];
+
+  const monthPreviewSlots = Array.from(
+    {
+      length:
+        (MONTH_PREVIEW_END_MINUTES - MONTH_PREVIEW_START_MINUTES) /
+        MONTH_PREVIEW_SLOT_MINUTES,
+    },
+    (_, index) => {
+      const totalMinutes =
+        MONTH_PREVIEW_START_MINUTES + index * MONTH_PREVIEW_SLOT_MINUTES;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}`;
+    },
+  );
+
+  const getMonthPreviewSlotState = (date: Date, slotStart: string) => {
+    const dayWizyty = getWizytyForDate(date).filter(
+      (wizyta) => wizyta.status !== "odwolana",
+    );
+    const slotStartMinutes =
+      Number(slotStart.substring(0, 2)) * 60 +
+      Number(slotStart.substring(3, 5));
+    const slotEndMinutes = slotStartMinutes + MONTH_PREVIEW_SLOT_MINUTES;
+
+    const matchingVisit = dayWizyty.find((wizyta) => {
+      const visitStart = wizyta.godzina.substring(0, 5);
+      const visitEnd = (
+        wizyta.godzina_do || addMinutesToTime(wizyta.godzina, 30)
+      ).substring(0, 5);
+      const visitStartMinutes =
+        Number(visitStart.substring(0, 2)) * 60 +
+        Number(visitStart.substring(3, 5));
+      const visitEndMinutes =
+        Number(visitEnd.substring(0, 2)) * 60 +
+        Number(visitEnd.substring(3, 5));
+
+      return (
+        slotStartMinutes < visitEndMinutes && slotEndMinutes > visitStartMinutes
+      );
+    });
+
+    if (!matchingVisit) {
+      return { state: "free" as const };
+    }
+
+    return {
+      state: matchingVisit.rodzaj === "GUMKI" ? ("gumki" as const) : ("occupied" as const),
+      visit: matchingVisit,
+    };
+  };
 
   // Fetch pacjenci from database
   const fetchPacjenci = async () => {
@@ -445,12 +505,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
       const startDate = format(weekDates[0], "yyyy-MM-dd");
       const endDate = format(weekDates[6], "yyyy-MM-dd");
       await fetchWizytyForRange(startDate, endDate, `week-${startDate}`, forceRefresh);
-    } else if (selectedView === "miesiac") {
-      // Widok miesięczny - pobierz cały miesiąc (42 dni dla kalendarza)
-      const monthDates = getMonthDates(selectedDate);
-      const startDate = format(monthDates[0], "yyyy-MM-dd");
-      const endDate = format(monthDates[monthDates.length - 1], "yyyy-MM-dd");
-      await fetchWizytyForRange(startDate, endDate, `month-${format(selectedDate, "yyyy-MM")}`, forceRefresh);
     }
   };
 
@@ -1381,6 +1435,23 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
 
   const weekDates = selectedDate ? getWeekDates(selectedDate) : [];
   const monthDates = selectedDate ? getMonthDates(selectedDate) : [];
+  const monthPreviewDates = getMonthDates(monthPreviewDate);
+
+  useEffect(() => {
+    if (!isMonthPreviewOpen) return;
+
+    const startDate = format(monthPreviewDates[0], "yyyy-MM-dd");
+    const endDate = format(
+      monthPreviewDates[monthPreviewDates.length - 1],
+      "yyyy-MM-dd",
+    );
+
+    fetchWizytyForRange(
+      startDate,
+      endDate,
+      `month-preview-${format(monthPreviewDate, "yyyy-MM")}`,
+    );
+  }, [isMonthPreviewOpen, monthPreviewDate]);
 
   // Funkcje nawigacji
   const goToPreviousWeek = () => {
@@ -1426,6 +1497,24 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const displayDateStr = format(selectedDate, "EEEE, d MMMM yyyy", { locale: pl });
     
+    // Pobierz wizyty dodatkowe dla wybranego dnia
+    let dodatkoweContent = '';
+    try {
+      const { data: dodatkoweData } = await supabase
+        .from('wizyty_dodatkowe_pacjenci_view')
+        .select('imie, nazwisko, rodzaj, notatki, status')
+        .eq('data', dateStr)
+        .neq('status', 'anulowana');
+
+      if (dodatkoweData && dodatkoweData.length > 0) {
+        dodatkoweContent = dodatkoweData
+          .map((w) => `- ${w.imie} ${w.nazwisko}: ${w.rodzaj}${w.notatki ? ` (${w.notatki})` : ''} [${w.status}]`)
+          .join('\n');
+      }
+    } catch (err) {
+      console.error('Error fetching additional visits for print:', err);
+    }
+
     // Pobierz notatkę dla wybranego dnia
     let noteContent = '';
     try {
@@ -1434,7 +1523,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         .select('tresc')
         .eq('data', dateStr)
         .maybeSingle();
-      
+
       if (noteData) {
         noteContent = noteData.tresc;
       }
@@ -1592,6 +1681,13 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
           <div class="summary">
             RAZEM: ${wizytyNaDzien.length} wizyt
           </div>
+
+          ${dodatkoweContent ? `
+            <div class="note-section">
+              <div class="note-title">+ Wizyty dodatkowe:</div>
+              <div class="note-content">${dodatkoweContent}</div>
+            </div>
+          ` : ''}
 
           ${noteContent ? `
             <div class="note-section">
@@ -1894,6 +1990,59 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
     setIsDialogOpen(true);
   };
 
+  const handleMonthPreviewSlotClick = (date: Date, slot: string) => {
+    const slotInfo = getMonthPreviewSlotState(date, slot);
+    const dateStr = format(date, "yyyy-MM-dd");
+
+    if (slotInfo.state === "free") {
+      setSelectedWizyta(null);
+      setSelectedPacjent(null);
+      setSearchQuery("");
+      setSearchResults([]);
+      setVisitDuration("15min");
+
+      const timeStr = `${slot}:00`;
+      const visitTimes = updateVisitTimes(timeStr, "15min");
+
+      setNowaWizyta({
+        data: dateStr,
+        ...visitTimes,
+        rodzaj: "LECZENIE",
+        notatki: "",
+        status: "zaplanowana",
+      });
+      setSelectedDate(date);
+      setIsMonthPreviewOpen(false);
+      setIsDialogOpen(true);
+      return;
+    }
+
+    if (slotInfo.visit) {
+      setSelectedDate(date);
+      setSelectedView("dzien");
+      setHighlightedWizytaId(slotInfo.visit.id);
+      setIsMonthPreviewOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!highlightedWizytaId || selectedView !== "dzien") return;
+
+    const scrollTimer = setTimeout(() => {
+      const element = document.getElementById(`wizyta-${highlightedWizytaId}`);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+
+    const clearTimer = setTimeout(() => {
+      setHighlightedWizytaId(null);
+    }, 3000);
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightedWizytaId, selectedView]);
+
   // Inicjalne wyszukanie terminów
   useEffect(() => {
     if (wizyty.length > 0) {
@@ -2042,18 +2191,29 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         <div className="md:w-2/3">
           <Card>
             <CardHeader>
-              <div className="flex justify-end items-center">
+              <div className="flex justify-end items-center gap-2 flex-wrap">
                 <Tabs
                   value={selectedView}
                   onValueChange={setSelectedView}
-                  className="w-[400px]"
+                  className="w-auto"
                 >
-                  <TabsList>
+                  <TabsList className="w-auto">
                     <TabsTrigger value="dzien">Dzień</TabsTrigger>
                     <TabsTrigger value="tydzien">Tydzień</TabsTrigger>
-                    <TabsTrigger value="miesiac">Miesiąc</TabsTrigger>
                   </TabsList>
                 </Tabs>
+                <Button
+                  className="shrink-0"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setMonthPreviewDate(selectedDate || new Date());
+                    setIsMonthPreviewOpen(true);
+                  }}
+                  disabled={loading}
+                >
+                  Podgląd miesiąca
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -2118,7 +2278,8 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             {wizytyNaDzien.map((wizyta) => (
                               <Card
                                 key={wizyta.id}
-                                className={`border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)}`}
+                                id={`wizyta-${wizyta.id}`}
+                                className={`border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)} ${highlightedWizytaId === wizyta.id ? "ring-2 ring-yellow-400 shadow-lg" : ""}`}
                                 onClick={() => handleWizytaClick(wizyta)}
                                 title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
                               >
@@ -2255,8 +2416,11 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       </ScrollArea>
                     </div>
 
-                    {/* NOTATKA DZIENNA - zawsze na dole */}
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 space-y-2">
+                      <WizytyDodatkowePanel 
+                        date={selectedDateStr}
+                        variant="calendar"
+                      />
                       <DailyNoteEditor 
                         date={selectedDateStr}
                         variant="calendar"
@@ -2370,123 +2534,140 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                   </div>
                 </TabsContent>
 
-                <TabsContent value="miesiac">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">
-                        {selectedDate 
-                          ? `${polskieMiesiace[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
-                          : "Wybierz datę"}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToPreviousMonth}
-                          disabled={loading}
-                        >
-                          ← Poprzedni
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToToday}
-                          disabled={loading}
-                        >
-                          Dzisiaj
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={goToNextMonth}
-                          disabled={loading}
-                        >
-                          Następny →
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-7 gap-1">
-                      {/* Nagłówki dni tygodnia */}
-                      {['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'].map((day) => (
-                        <div key={day} className="p-2 text-center text-sm font-medium text-gray-600 bg-gray-50">
-                          {day}
-                        </div>
-                      ))}
-                      
-                      {/* Dni miesiąca */}
-                      {monthDates.map((date, index) => {
-                        const dayWizyty = getWizytyForDate(date);
-                        const isToday = format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
-                        // Określ wyświetlany miesiąc na podstawie środkowego dnia z monthDates (zawsze należy do wyświetlanego miesiąca)
-                        const middleDate = monthDates.length > 0 ? monthDates[Math.floor(monthDates.length / 2)] : new Date();
-                        const isCurrentMonth = date.getMonth() === middleDate.getMonth() && date.getFullYear() === middleDate.getFullYear();
-                        const isSelected = selectedDate && format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
-                        const isVacation = isVacationDay(format(date, "yyyy-MM-dd"));
-                        const isWorking = isWorkingDay(format(date, "yyyy-MM-dd"));
-                        
-                        return (
-                          <div
-                            key={index}
-                            className={`border rounded-lg p-1 min-h-[80px] cursor-pointer transition-colors ${
-                              isVacation ? "bg-red-50 border-red-200" :
-                              isToday ? "bg-blue-50 border-blue-200" : 
-                              isSelected ? "bg-gray-50 border-gray-300" : 
-                              isWorking ? "bg-white border-gray-200 hover:bg-gray-50" : 
-                              "bg-gray-100 border-gray-200"
-                            } ${!isCurrentMonth ? "opacity-60" : ""}`}
-                            onClick={() => {
-                              setSelectedDate(date);
-                              setSelectedView("dzien");
-                            }}
-                          >
-                            <div className="text-center mb-1">
-                              <div className={`text-sm font-medium ${
-                                isToday ? "text-blue-600" : 
-                                isSelected ? "text-gray-900" : 
-                                isCurrentMonth ? "text-gray-700" : 
-                                "text-gray-400"
-                              }`}>
-                                {format(date, "d")}
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-0.5">
-                              {dayWizyty.slice(0, 2).map((wizyta) => (
-                                <div
-                                  key={wizyta.id}
-                                  className="text-xs p-0.5 bg-blue-100 text-blue-800 rounded cursor-pointer hover:bg-blue-200 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleWizytaClick(wizyta);
-                                  }}
-                                  title={`${wizyta.godzina.substring(0, 5)} - ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
-                                >
-                                  <div className="font-medium truncate">
-                                    {wizyta.godzina.substring(0, 5)}
-                                  </div>
-                                  <div className="truncate text-xs">
-                                    {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
-                                  </div>
-                                </div>
-                              ))}
-                              {dayWizyty.length > 2 && (
-                                <div className="text-xs text-gray-500 text-center">
-                                  +{dayWizyty.length - 2}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <Dialog open={isMonthPreviewOpen} onOpenChange={setIsMonthPreviewOpen}>
+        <DialogContent className="max-w-[95vw] w-[95vw]">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-4">
+              <DialogTitle>
+                {`Podgląd miesiąca - ${polskieMiesiace[monthPreviewDate.getMonth()]} ${monthPreviewDate.getFullYear()}`}
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setMonthPreviewDate((prev) => {
+                      const newDate = new Date(prev);
+                      newDate.setMonth(newDate.getMonth() - 1);
+                      return newDate;
+                    })
+                  }
+                >
+                  ← Poprzedni
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMonthPreviewDate(new Date())}
+                >
+                  Dzisiaj
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setMonthPreviewDate((prev) => {
+                      const newDate = new Date(prev);
+                      newDate.setMonth(newDate.getMonth() + 1);
+                      return newDate;
+                    })
+                  }
+                >
+                  Następny →
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="border rounded-lg overflow-hidden">
+            <ScrollArea className="h-[75vh] w-full">
+              <div className="min-w-max">
+                <table className="border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="sticky top-0 left-0 z-20 bg-white border p-2 text-xs font-medium text-gray-600 min-w-[72px]">
+                        Godzina
+                      </th>
+                      {monthPreviewDates.map((date, index) => {
+                        const middleDate =
+                          monthPreviewDates.length > 0
+                            ? monthPreviewDates[Math.floor(monthPreviewDates.length / 2)]
+                            : new Date();
+                        const isCurrentMonth =
+                          date.getMonth() === middleDate.getMonth() &&
+                          date.getFullYear() === middleDate.getFullYear();
+
+                        return (
+                          <th
+                            key={`${format(date, "yyyy-MM-dd")}-${index}`}
+                            className={`sticky top-0 z-10 border p-2 text-center text-xs font-medium min-w-[44px] ${
+                              isCurrentMonth
+                                ? "bg-gray-50 text-gray-700"
+                                : "bg-gray-100 text-gray-400"
+                            }`}
+                            title={format(date, "EEEE, d MMMM yyyy", {
+                              locale: pl,
+                            })}
+                          >
+                            <div>{format(date, "EEE", { locale: pl })}</div>
+                            <div className="mt-1">{format(date, "d")}</div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthPreviewSlots.map((slot) => (
+                      <tr key={slot}>
+                        <td className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-gray-600 font-medium">
+                          {slot}
+                        </td>
+                        {monthPreviewDates.map((date, index) => {
+                          const slotInfo = getMonthPreviewSlotState(date, slot);
+                          const middleDate =
+                            monthPreviewDates.length > 0
+                              ? monthPreviewDates[Math.floor(monthPreviewDates.length / 2)]
+                              : new Date();
+                          const isCurrentMonth =
+                            date.getMonth() === middleDate.getMonth() &&
+                            date.getFullYear() === middleDate.getFullYear();
+                          const formattedDate = format(date, "dd.MM.yyyy");
+                          const cellTitle =
+                            slotInfo.state === "free"
+                              ? `Dodaj wizytę — ${formattedDate} ${slot}`
+                              : slotInfo.visit
+                                ? `Przejdź do wizyty — ${slotInfo.visit.pacjenci.imie} ${slotInfo.visit.pacjenci.nazwisko} ${slot}`
+                                : undefined;
+
+                          return (
+                            <td
+                              key={`${format(date, "yyyy-MM-dd")}-${slot}-${index}`}
+                              onClick={() => handleMonthPreviewSlotClick(date, slot)}
+                              title={cellTitle}
+                              className={`border h-5 min-w-[44px] cursor-pointer hover:opacity-80 ${
+                                slotInfo.state === "gumki"
+                                  ? "bg-green-400"
+                                  : slotInfo.state === "occupied"
+                                    ? "bg-blue-400"
+                                    : "bg-white"
+                              } ${!isCurrentMonth ? "opacity-50" : ""}`}
+                            />
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog dodawania/edycji wizyty */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -3355,7 +3536,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
         </DialogContent>
       </Dialog>
 
-      {console.log('🔍 DEBUG - AlertDialog renderowany:', timeSlotWarningDialog, timeSlotWarningMessage)}
       <AlertDialog open={timeSlotWarningDialog} onOpenChange={setTimeSlotWarningDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

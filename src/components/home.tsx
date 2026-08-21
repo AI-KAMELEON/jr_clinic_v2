@@ -8,13 +8,15 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Users, FileText, Plus, LogOut, CheckCircle, X, Printer } from "lucide-react";
+import { Calendar, Clock, Users, FileText, Plus, LogOut, CheckCircle, X, Printer, AlertTriangle } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
 import KalendarzWizyt from "./KalendarzWizyt";
 import KartaPacjenta from "./KartaPacjenta";
 import { AdminManagement } from "./AdminManagement";
 import MessagesPage from "./MessagesPage";
 import DigitalClock from "./DigitalClock";
+import WizytyDodatkowePanel from "./WizytyDodatkowePanel";
+import WizytyCitoPanel from "./WizytyCitoPanel";
 import DailyNoteEditor from "./DailyNoteEditor";
 import { supabase, type VisitStatus } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -86,6 +88,24 @@ const Home = () => {
     const todayStr = today.toLocaleDateString('pl-PL');
     const todayDateStr = today.toISOString().split('T')[0];
     
+    // Pobierz wizyty dodatkowe na dziś
+    let dodatkoweContent = '';
+    try {
+      const { data: dodatkoweData } = await supabase
+        .from('wizyty_dodatkowe_pacjenci_view')
+        .select('imie, nazwisko, rodzaj, notatki, status')
+        .eq('data', todayDateStr)
+        .neq('status', 'anulowana');
+
+      if (dodatkoweData && dodatkoweData.length > 0) {
+        dodatkoweContent = dodatkoweData
+          .map((w) => `- ${w.imie} ${w.nazwisko}: ${w.rodzaj}${w.notatki ? ` (${w.notatki})` : ''} [${w.status}]`)
+          .join('\n');
+      }
+    } catch (err) {
+      console.error('Error fetching additional visits for print:', err);
+    }
+
     // Pobierz notatkę na dziś
     let noteContent = '';
     try {
@@ -94,7 +114,7 @@ const Home = () => {
         .select('tresc')
         .eq('data', todayDateStr)
         .maybeSingle();
-      
+
       if (noteData) {
         noteContent = noteData.tresc;
       }
@@ -244,6 +264,13 @@ const Home = () => {
           <div class="summary">
             RAZEM: ${dashboardData.todayAppointments.length} wizyt
           </div>
+
+          ${dodatkoweContent ? `
+            <div class="note-section">
+              <div class="note-title">+ Wizyty dodatkowe:</div>
+              <div class="note-content">${dodatkoweContent}</div>
+            </div>
+          ` : ''}
 
           ${noteContent ? `
             <div class="note-section">
@@ -463,6 +490,14 @@ const Home = () => {
               Kalendarz wizyt
             </Button>
             <Button
+              variant={activeTab === "wizyty-cito" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("wizyty-cito")}
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              Wizyty Cito
+            </Button>
+            <Button
               variant={activeTab === "wiadomosci" ? "default" : "ghost"}
               className="w-full justify-start"
               onClick={() => setActiveTab("wiadomosci")}
@@ -545,12 +580,6 @@ const Home = () => {
                   </Card>
                 </div>
               </div>
-
-              <DailyNoteEditor 
-                date={new Date().toISOString().split('T')[0]} 
-                variant="dashboard"
-                className="mb-6"
-              />
 
               <Card>
                 <CardHeader>
@@ -654,6 +683,18 @@ const Home = () => {
                 </CardContent>
               </Card>
 
+              <WizytyDodatkowePanel 
+                date={new Date().toISOString().split('T')[0]} 
+                variant="dashboard"
+                className="mb-6"
+              />
+
+              <DailyNoteEditor 
+                date={new Date().toISOString().split('T')[0]} 
+                variant="dashboard"
+                className="mb-6"
+              />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -690,6 +731,10 @@ const Home = () => {
                 onNavigateToPatients={() => setActiveTab("pacjenci")} 
                 onPatientSelect={handlePatientSelect}
               />
+            </TabsContent>
+
+            <TabsContent value="wizyty-cito">
+              <WizytyCitoPanel onPatientSelect={handlePatientSelect} />
             </TabsContent>
 
             <TabsContent value="wiadomosci">

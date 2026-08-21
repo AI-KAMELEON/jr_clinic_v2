@@ -352,6 +352,82 @@ export type Database = {
         }
         Relationships: []
       }
+      wizyty_cito: {
+        Row: {
+          created_at: string | null
+          id: string
+          kolejnosc: number
+          notatki: string | null
+          pacjent_id: string
+          powod: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kolejnosc: number
+          notatki?: string | null
+          pacjent_id: string
+          powod?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kolejnosc?: number
+          notatki?: string | null
+          pacjent_id?: string
+          powod?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wizyty_cito_pacjent_id_fkey"
+            columns: ["pacjent_id"]
+            isOneToOne: false
+            referencedRelation: "pacjenci"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wizyty_dodatkowe: {
+        Row: {
+          created_at: string | null
+          data: string
+          id: string
+          notatki: string | null
+          pacjent_id: string
+          rodzaj: string
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          data: string
+          id?: string
+          notatki?: string | null
+          pacjent_id: string
+          rodzaj: string
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: string
+          id?: string
+          notatki?: string | null
+          pacjent_id?: string
+          rodzaj?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wizyty_dodatkowe_pacjent_id_fkey"
+            columns: ["pacjent_id"]
+            isOneToOne: false
+            referencedRelation: "pacjenci"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       sms_logs_view: {
@@ -367,6 +443,36 @@ export type Database = {
           telefon: string | null
           tresc: string | null
           typ: string | null
+        }
+        Relationships: []
+      }
+      wizyty_cito_pacjenci_view: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          imie: string | null
+          kolejnosc: number | null
+          nazwisko: string | null
+          notatki: string | null
+          pacjent_id: string | null
+          powod: string | null
+          status: string | null
+          telefon: string | null
+        }
+        Relationships: []
+      }
+      wizyty_dodatkowe_pacjenci_view: {
+        Row: {
+          created_at: string | null
+          data: string | null
+          id: string | null
+          imie: string | null
+          nazwisko: string | null
+          notatki: string | null
+          pacjent_id: string | null
+          rodzaj: string | null
+          status: string | null
+          telefon: string | null
         }
         Relationships: []
       }

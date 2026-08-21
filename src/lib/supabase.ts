@@ -30,9 +30,17 @@ export type PlanPracyUpdate = Updates<"plany_pracy">;
 export type NotatkaDzienna = Tables<"notatki_dzienne">;
 export type NotatkaDziennaInsert = Inserts<"notatki_dzienne">;
 export type NotatkaDziennaUpdate = Updates<"notatki_dzienne">;
+export type WizytaCito = Tables<"wizyty_cito">;
+export type WizytaCitoInsert = Inserts<"wizyty_cito">;
+export type WizytaCitoUpdate = Updates<"wizyty_cito">;
+export type WizytaDodatkowa = Tables<"wizyty_dodatkowe">;
+export type WizytaDodatkowaInsert = Inserts<"wizyty_dodatkowe">;
+export type WizytaDodatkowaUpdate = Updates<"wizyty_dodatkowe">;
 
 // Visit status types
 export type VisitStatus = 'zaplanowana' | 'wykonana' | 'odwolana';
+export type CitoStatus = 'oczekujaca' | 'zrealizowana' | 'anulowana';
+export type DodatkowaStatus = 'zaplanowana' | 'wykonana' | 'anulowana';
 
 // Work schedule types
 export type WorkSchedule = {

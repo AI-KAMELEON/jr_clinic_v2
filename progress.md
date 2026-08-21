@@ -1,5 +1,12 @@
 # Postępy
 
+- [2026-08-19] Usunięto klasyczny tab `Miesiąc` z `KalendarzWizyt` i zastąpiono go osobnym przyciskiem `Podgląd miesiąca`
+- [2026-08-19] Podgląd miesiąca działa teraz jako niezależny modal z własną nawigacją `Poprzedni / Dzisiaj / Następny`
+- [2026-08-19] Modal tabelaryczny pobiera zakres miesięczny niezależnie od aktywnego widoku `Dzień` lub `Tydzień`
+- [2026-08-19] Dodano przycisk `Podgląd miesiąca` w `KalendarzWizyt` obok przełącznika widoku `Miesiąc`
+- [2026-08-19] Dodano modal z miesięczną siatką slotów 15-minutowych od 08:00 do 20:00, z kolorowaniem zajętych komórek bez tekstu
+- [2026-08-19] Zaimplementowano kolorowanie podglądu miesiąca: `GUMKI` na zielono, pozostałe wizyty na niebiesko, wolne sloty na biało
+- [2026-08-19] Usunięto debugowy `console.log` z JSX w `KalendarzWizyt`, co przywróciło poprawny wynik `tsc --noEmit`
 - [2025-11-14] Naprawiono problem z wyświetlaniem wizyt na styczeń i luty 2026 - wizyty były w bazie, ale nie były widoczne w kalendarzu
 - [2025-11-14] Dodano funkcję pomocniczą isSameDate do niezawodnego porównywania dat (zamiast porównywania stringów)
 - [2025-11-14] Poprawiono funkcję getWizytyForDate - używa teraz porównania dat zamiast stringów dla poprawnego wyświetlania wizyt
