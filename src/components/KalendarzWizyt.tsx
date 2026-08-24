@@ -100,6 +100,8 @@ const polskieMiesiace = [
 const MONTH_PREVIEW_START_MINUTES = 8 * 60;
 const MONTH_PREVIEW_END_MINUTES = 20 * 60;
 const MONTH_PREVIEW_SLOT_MINUTES = 15;
+const VACATION_HIGHLIGHT_START_MINUTES = 9 * 60;
+const VACATION_HIGHLIGHT_END_MINUTES = 18 * 60 + 45;
 
 const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizytProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
@@ -259,13 +261,24 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   );
 
   const getMonthPreviewSlotState = (date: Date, slotStart: string) => {
-    const dayWizyty = getWizytyForDate(date).filter(
-      (wizyta) => wizyta.status !== "odwolana",
-    );
+    const dateKey = format(date, "yyyy-MM-dd");
+    const vacation = isVacationDay(dateKey);
     const slotStartMinutes =
       Number(slotStart.substring(0, 2)) * 60 +
       Number(slotStart.substring(3, 5));
     const slotEndMinutes = slotStartMinutes + MONTH_PREVIEW_SLOT_MINUTES;
+
+    if (
+      vacation &&
+      slotStartMinutes >= VACATION_HIGHLIGHT_START_MINUTES &&
+      slotStartMinutes <= VACATION_HIGHLIGHT_END_MINUTES
+    ) {
+      return { state: "vacation" as const };
+    }
+
+    const dayWizyty = getWizytyForDate(date).filter(
+      (wizyta) => wizyta.status !== "odwolana",
+    );
 
     const matchingVisit = dayWizyty.find((wizyta) => {
       const visitStart = wizyta.godzina.substring(0, 5);
@@ -2637,12 +2650,18 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                             date.getMonth() === middleDate.getMonth() &&
                             date.getFullYear() === middleDate.getFullYear();
                           const formattedDate = format(date, "dd.MM.yyyy");
+                          const vacationForDay = urlopy.find((u) => {
+                            const d = new Date(formattedDate.split(".").reverse().join("-") + "T00:00:00");
+                            return d >= new Date(u.data_od + "T00:00:00") && d <= new Date(u.data_do + "T00:00:00");
+                          });
                           const cellTitle =
-                            slotInfo.state === "free"
-                              ? `Dodaj wizytę — ${formattedDate} ${slot}`
-                              : slotInfo.visit
-                                ? `Przejdź do wizyty — ${slotInfo.visit.pacjenci.imie} ${slotInfo.visit.pacjenci.nazwisko} ${slot}`
-                                : undefined;
+                            slotInfo.state === "vacation"
+                              ? `Urlop${vacationForDay?.opis ? ` — ${vacationForDay.opis}` : ""}`
+                              : slotInfo.state === "free"
+                                ? `Dodaj wizytę — ${formattedDate} ${slot}`
+                                : slotInfo.visit
+                                  ? `Przejdź do wizyty — ${slotInfo.visit.pacjenci.imie} ${slotInfo.visit.pacjenci.nazwisko} ${slot}`
+                                  : undefined;
 
                           return (
                             <td
@@ -2650,11 +2669,13 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                               onClick={() => handleMonthPreviewSlotClick(date, slot)}
                               title={cellTitle}
                               className={`border h-5 min-w-[44px] cursor-pointer hover:opacity-80 ${
-                                slotInfo.state === "gumki"
-                                  ? "bg-green-400"
-                                  : slotInfo.state === "occupied"
-                                    ? "bg-blue-400"
-                                    : "bg-white"
+                                slotInfo.state === "vacation"
+                                  ? "bg-yellow-200"
+                                  : slotInfo.state === "gumki"
+                                    ? "bg-green-400"
+                                    : slotInfo.state === "occupied"
+                                      ? "bg-blue-400"
+                                      : "bg-white"
                               } ${!isCurrentMonth ? "opacity-50" : ""}`}
                             />
                           );
