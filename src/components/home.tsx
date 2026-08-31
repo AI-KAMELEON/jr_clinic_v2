@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -6,7 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Users, FileText, Plus, LogOut, CheckCircle, X, Printer, AlertTriangle } from "lucide-react";
 import PacjenciPanel from "./PacjenciPanel";
@@ -30,6 +29,7 @@ const Home = () => {
     null,
   );
   const [prefilledPatientName, setPrefilledPatientName] = useState<string>("");
+  const mainRef = useRef<HTMLElement>(null);
 
   // Stan dla danych dashboardu
   const [dashboardData, setDashboardData] = useState({
@@ -386,6 +386,10 @@ const Home = () => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [activeTab]);
+
   const handlePatientSelect = (patientId: string) => {
     setSelectedPatientId(patientId);
     setActiveTab("karta-pacjenta");
@@ -461,7 +465,7 @@ const Home = () => {
       </header>
 
       {/* Główna zawartość */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         {/* Menu boczne */}
         <aside className="w-64 border-r bg-white p-4">
           <nav className="space-y-2">
@@ -527,53 +531,46 @@ const Home = () => {
         </aside>
 
         {/* Obszar roboczy */}
-        <main className="flex-1 p-6 overflow-auto">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
-            <TabsContent value="dashboard" className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-6">Panel główny</h2>
-                
+        <main ref={mainRef} className="flex-1 min-h-0 p-6 overflow-auto">
+          {activeTab === "dashboard" && (
+            <div className="flex flex-col h-[calc(100vh-8.5rem)] min-h-0">
+              <div className="shrink-0 space-y-3">
+                <h2 className="text-xl font-bold">Panel główny</h2>
+
                 {dashboardData.error && (
-                  <Alert className="mb-4">
+                  <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{dashboardData.error}</AlertDescription>
                   </Alert>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-3 gap-3">
                   <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>Dzisiejsze wizyty</CardTitle>
-                      <CardDescription>Zaplanowane na dziś</CardDescription>
+                    <CardHeader className="pb-1 pt-3 px-3">
+                      <CardTitle className="text-sm">Dzisiejsze wizyty</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold">
+                    <CardContent className="px-3 pb-3">
+                      <div className="text-2xl font-bold">
                         {dashboardData.loading ? "..." : dashboardData.todayAppointments.length}
                       </div>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>Pacjenci</CardTitle>
-                      <CardDescription>Łączna liczba pacjentów</CardDescription>
+                    <CardHeader className="pb-1 pt-3 px-3">
+                      <CardTitle className="text-sm">Pacjenci</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold">
+                    <CardContent className="px-3 pb-3">
+                      <div className="text-2xl font-bold">
                         {dashboardData.loading ? "..." : dashboardData.totalPatients}
                       </div>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>Wizyty w tym tygodniu</CardTitle>
-                      <CardDescription>Zaplanowane wizyty</CardDescription>
+                    <CardHeader className="pb-1 pt-3 px-3">
+                      <CardTitle className="text-sm">Wizyty w tygodniu</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold">
+                    <CardContent className="px-3 pb-3">
+                      <div className="text-2xl font-bold">
                         {dashboardData.loading ? "..." : dashboardData.weeklyAppointments}
                       </div>
                     </CardContent>
@@ -581,6 +578,7 @@ const Home = () => {
                 </div>
               </div>
 
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mt-3 pr-1">
               <Card>
                 <CardHeader>
                   <div className="flex justify-between items-center">
@@ -686,16 +684,14 @@ const Home = () => {
               <WizytyDodatkowePanel 
                 date={new Date().toISOString().split('T')[0]} 
                 variant="dashboard"
-                className="mb-6"
               />
 
               <DailyNoteEditor 
                 date={new Date().toISOString().split('T')[0]} 
                 variant="dashboard"
-                className="mb-6"
               />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle>Szybkie akcje</CardTitle>
@@ -716,39 +712,40 @@ const Home = () => {
                   </CardContent>
                 </Card>
               </div>
-            </TabsContent>
+              </div>
+            </div>
+          )}
 
-            <TabsContent value="pacjenci">
+          {activeTab === "pacjenci" && (
               <PacjenciPanel
                 onPatientSelect={handlePatientSelect}
                 prefilledName={prefilledPatientName}
                 onNameUsed={() => setPrefilledPatientName("")}
               />
-            </TabsContent>
+          )}
 
-            <TabsContent value="kalendarz">
+          {activeTab === "kalendarz" && (
               <KalendarzWizyt 
                 onNavigateToPatients={() => setActiveTab("pacjenci")} 
                 onPatientSelect={handlePatientSelect}
               />
-            </TabsContent>
+          )}
 
-            <TabsContent value="wizyty-cito">
+          {activeTab === "wizyty-cito" && (
               <WizytyCitoPanel onPatientSelect={handlePatientSelect} />
-            </TabsContent>
+          )}
 
-            <TabsContent value="wiadomosci">
+          {activeTab === "wiadomosci" && (
               <MessagesPage />
-            </TabsContent>
+          )}
 
-            <TabsContent value="karta-pacjenta">
-              {selectedPatientId && <KartaPacjenta pacjentId={selectedPatientId} />}
-            </TabsContent>
+          {activeTab === "karta-pacjenta" && selectedPatientId && (
+              <KartaPacjenta pacjentId={selectedPatientId} />
+          )}
 
-            <TabsContent value="administratorzy">
+          {activeTab === "administratorzy" && (
               <AdminManagement />
-            </TabsContent>
-          </Tabs>
+          )}
         </main>
       </div>
     </div>

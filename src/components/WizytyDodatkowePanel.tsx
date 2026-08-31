@@ -93,6 +93,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
   };
 
   const isCompact = variant === "calendar";
+  const useSingleLine = variant === "dashboard" || variant === "calendar";
 
   return (
     <Card className={className}>
@@ -129,52 +130,97 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
             {wizyty.map((wizyta) => (
               <div
                 key={wizyta.id}
-                className={`flex items-start justify-between gap-2 rounded-md border p-2 ${
+                className={`flex items-center justify-between gap-2 rounded-md border p-2 ${
                   wizyta.status === "wykonana" ? "bg-green-50 border-green-200" : "bg-muted/40"
-                }`}
+                } ${useSingleLine ? "text-xs" : ""}`}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">
-                    {wizyta.imie} {wizyta.nazwisko}
-                  </div>
-                  <div className="text-muted-foreground">{wizyta.rodzaj}</div>
-                  {wizyta.notatki && (
-                    <div className="text-muted-foreground mt-1 italic truncate">
-                      {wizyta.notatki}
+                {useSingleLine ? (
+                  <>
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="w-[9rem] shrink-0 truncate font-medium">
+                        {wizyta.imie} {wizyta.nazwisko}
+                      </span>
+                      <span className="w-[6rem] shrink-0 truncate text-muted-foreground">
+                        {wizyta.rodzaj}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                        {wizyta.notatki || "—"}
+                      </span>
                     </div>
-                  )}
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  {wizyta.status === "zaplanowana" && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={isCompact ? "h-6 w-6" : "h-8 w-8"}
-                        onClick={() => updateStatus(wizyta.id, "wykonana")}
-                        title="Oznacz jako wykonana"
-                      >
-                        <CheckCircle2
-                          className={`text-green-600 ${isCompact ? "h-3 w-3" : "h-4 w-4"}`}
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={isCompact ? "h-6 w-6" : "h-8 w-8"}
-                        onClick={() => updateStatus(wizyta.id, "anulowana")}
-                        title="Anuluj"
-                      >
-                        <XCircle
-                          className={`text-red-600 ${isCompact ? "h-3 w-3" : "h-4 w-4"}`}
-                        />
-                      </Button>
-                    </>
-                  )}
-                  {wizyta.status === "wykonana" && (
-                    <span className="text-green-600 text-xs font-medium px-1">Wykonana</span>
-                  )}
-                </div>
+                    <div className="flex shrink-0 gap-1">
+                      {wizyta.status === "zaplanowana" && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateStatus(wizyta.id, "wykonana")}
+                            title="Oznacz jako wykonana"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateStatus(wizyta.id, "anulowana")}
+                            title="Anuluj"
+                          >
+                            <XCircle className="h-3.5 w-3.5 text-red-600" />
+                          </Button>
+                        </>
+                      )}
+                      {wizyta.status === "wykonana" && (
+                        <span className="px-1 text-xs font-medium text-green-600">Wykonana</span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">
+                        {wizyta.imie} {wizyta.nazwisko}
+                      </div>
+                      <div className="text-muted-foreground">{wizyta.rodzaj}</div>
+                      {wizyta.notatki && (
+                        <div className="text-muted-foreground mt-1 italic truncate">
+                          {wizyta.notatki}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {wizyta.status === "zaplanowana" && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={isCompact ? "h-6 w-6" : "h-8 w-8"}
+                            onClick={() => updateStatus(wizyta.id, "wykonana")}
+                            title="Oznacz jako wykonana"
+                          >
+                            <CheckCircle2
+                              className={`text-green-600 ${isCompact ? "h-3 w-3" : "h-4 w-4"}`}
+                            />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={isCompact ? "h-6 w-6" : "h-8 w-8"}
+                            onClick={() => updateStatus(wizyta.id, "anulowana")}
+                            title="Anuluj"
+                          >
+                            <XCircle
+                              className={`text-red-600 ${isCompact ? "h-3 w-3" : "h-4 w-4"}`}
+                            />
+                          </Button>
+                        </>
+                      )}
+                      {wizyta.status === "wykonana" && (
+                        <span className="text-green-600 text-xs font-medium px-1">Wykonana</span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

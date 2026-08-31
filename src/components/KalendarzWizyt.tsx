@@ -51,7 +51,6 @@ import {
   X,
   Users,
   Printer,
-  Phone,
   RotateCcw,
 } from "lucide-react";
 import {
@@ -2235,9 +2234,10 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                 onValueChange={setSelectedView}
                 className="w-full"
               >
-                <TabsContent value="dzien" className="mt-0 h-[calc(100vh-280px)]">
-                  <div className="flex flex-col h-full">
-                    <div className="flex-shrink-0 text-center">
+                <TabsContent value="dzien" className="mt-0 h-[calc(100vh-280px)] min-h-0">
+                  <div className="flex flex-col h-full min-h-0">
+                    <div className="shrink-0 space-y-2">
+                      <div className="text-center">
                       {!selectedDate ? (
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
                           <h3 className="text-sm font-medium text-gray-600">
@@ -2269,167 +2269,143 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                           <p className="text-xs text-gray-500">Dzień wolny od pracy</p>
                         </div>
                       )}
-                    </div>
-                    <div className="flex-shrink-0 flex justify-between items-center mb-2 mt-2">
-                      <h3 className="text-base font-medium">Wizyty na wybrany dzień</h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handlePrintSelectedDayVisits}
-                        className="flex items-center space-x-1 h-7 px-2"
-                      >
-                        <Printer className="h-3 w-3" />
-                        <span className="text-xs">Drukuj</span>
-                      </Button>
-                    </div>
-                    
-                    {/* WIZYTY - ScrollArea z jedną wizytą w wierszu */}
-                    <div className="flex-1 min-h-0 mb-2">
-                      <ScrollArea className="h-full">
-                        {wizytyNaDzien.length > 0 ? (
-                          <div className="space-y-3 pr-4">
-                            {wizytyNaDzien.map((wizyta) => (
-                              <Card
-                                key={wizyta.id}
-                                id={`wizyta-${wizyta.id}`}
-                                className={`border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} cursor-pointer hover:shadow-md transition-all duration-200 ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)} ${highlightedWizytaId === wizyta.id ? "ring-2 ring-yellow-400 shadow-lg" : ""}`}
-                                onClick={() => handleWizytaClick(wizyta)}
-                                title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
-                              >
-                                <CardContent className="p-4">
-                                  <div className="flex justify-between items-start gap-4">
-                                    <div className="flex-1">
-                                      <div className="flex items-center mb-2">
-                                        <Clock className="mr-2 text-gray-500 flex-shrink-0 h-4 w-4" />
-                                        <span className="font-medium text-sm">
-                                          {wizyta.godzina.substring(0, 5)}
-                                          {wizyta.godzina_do && (
-                                            <span className="text-gray-500 ml-2">
-                                              - {wizyta.godzina_do.substring(0, 5)}
-                                            </span>
-                                          )}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-3 flex-wrap">
-                                        <h4 className="font-semibold text-lg hover:text-blue-600 transition-colors">
-                                          {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
-                                        </h4>
-                                        <div className="flex items-center text-gray-600 text-sm">
-                                          <Phone className="mr-1.5 h-3.5 w-3.5 flex-shrink-0" />
-                                          <span>{wizyta.pacjenci.telefon}</span>
-                                        </div>
-                                      </div>
-                                      <p className="text-gray-600 text-sm mt-1">
-                                        {wizyta.rodzaj}
-                                      </p>
-                                      {wizyta.notatki && (
-                                        <p className="text-gray-500 text-xs mt-2 italic">
-                                          {wizyta.notatki}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
-                                      {/* Przyciski statusów - różne opcje w zależności od aktualnego statusu */}
-                                      <div className="flex space-x-2">
-                                        {/* ZAPLANOWANA: pokaż [Wykonana] [Odwołana] */}
-                                        {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
-                                          <>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana' as VisitStatus)}
-                                              disabled={loading}
-                                              className="text-green-600 hover:text-green-700"
-                                              title="Oznacz wizytę jako wykonana"
-                                            >
-                                              <CheckCircle className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana' as VisitStatus)}
-                                              disabled={loading}
-                                              className="text-red-600 hover:text-red-700"
-                                              title="Anuluj wizytę"
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          </>
-                                        )}
-                                        
-                                        {/* WYKONANA: pokaż [Cofnij] */}
-                                        {wizyta.status === 'wykonana' && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana' as VisitStatus)}
-                                            disabled={loading}
-                                            className="text-blue-600 hover:text-blue-700"
-                                            title="Cofnij do statusu zaplanowana"
-                                          >
-                                            <RotateCcw className="h-4 w-4" />
-                                          </Button>
-                                        )}
-                                        
-                                        {/* ODWOŁANA: pokaż [Wykonana] [Cofnij] */}
-                                        {wizyta.status === 'odwolana' && (
-                                          <>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
-                                              disabled={loading}
-                                              className="text-green-600 hover:text-green-700"
-                                              title="Pacjent jednak przyszedł - oznacz jako wykonana"
-                                            >
-                                              <CheckCircle className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
-                                              disabled={loading}
-                                              className="text-blue-600 hover:text-blue-700"
-                                              title="Cofnij do statusu zaplanowana"
-                                            >
-                                              <RotateCcw className="h-4 w-4" />
-                                            </Button>
-                                          </>
-                                        )}
-                                      </div>
-                                      <div className="flex space-x-2">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleEditWizyta(wizyta)}
-                                          disabled={loading}
-                                        >
-                                          <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleDeleteWizyta(wizyta)}
-                                          disabled={loading}
-                                        >
-                                          <Trash2 className="text-red-500 h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-gray-500">
-                            Brak wizyt na wybrany dzień
-                          </div>
-                        )}
-                      </ScrollArea>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-base font-medium">Wizyty na wybrany dzień</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handlePrintSelectedDayVisits}
+                          className="flex items-center space-x-1 h-7 px-2"
+                        >
+                          <Printer className="h-3 w-3" />
+                          <span className="text-xs">Drukuj</span>
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="flex-shrink-0 space-y-2">
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mt-2 pr-1">
+                      {wizytyNaDzien.length > 0 ? (
+                        <div className="space-y-2">
+                          {wizytyNaDzien.map((wizyta) => (
+                            <div
+                              key={wizyta.id}
+                              id={`wizyta-${wizyta.id}`}
+                              className={`flex items-center justify-between gap-2 border-l-4 ${getVisitBorderColor((wizyta.status || 'zaplanowana') as VisitStatus)} ${getVisitBackgroundColor((wizyta.status || 'zaplanowana') as VisitStatus)} rounded-md p-2 cursor-pointer transition-colors ${highlightedWizytaId === wizyta.id ? "ring-2 ring-yellow-400" : ""}`}
+                              onClick={() => handleWizytaClick(wizyta)}
+                              title={`Kliknij aby przejść do karty pacjenta: ${wizyta.pacjenci.imie} ${wizyta.pacjenci.nazwisko}`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm truncate">
+                                  {wizyta.pacjenci.imie} {wizyta.pacjenci.nazwisko}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {wizyta.rodzaj}
+                                  {wizyta.notatki ? ` · ${wizyta.notatki}` : ""}
+                                </p>
+                              </div>
+                              <div
+                                className="flex shrink-0 items-center gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="text-xs font-medium whitespace-nowrap mr-1">
+                                  {wizyta.godzina.substring(0, 5)}
+                                  {wizyta.godzina_do && (
+                                    <span className="text-muted-foreground">
+                                      –{wizyta.godzina_do.substring(0, 5)}
+                                    </span>
+                                  )}
+                                </span>
+                                {(wizyta.status === 'zaplanowana' || !wizyta.status) && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana' as VisitStatus)}
+                                      disabled={loading}
+                                      className="text-green-600 hover:text-green-700 p-1 h-7 w-7"
+                                      title="Oznacz jako wykonana"
+                                    >
+                                      <CheckCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUpdateVisitStatus(wizyta, 'odwolana' as VisitStatus)}
+                                      disabled={loading}
+                                      className="text-red-600 hover:text-red-700 p-1 h-7 w-7"
+                                      title="Anuluj wizytę"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                                {wizyta.status === 'wykonana' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana' as VisitStatus)}
+                                    disabled={loading}
+                                    className="text-blue-600 hover:text-blue-700 p-1 h-7 w-7"
+                                    title="Cofnij do zaplanowana"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {wizyta.status === 'odwolana' && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUpdateVisitStatus(wizyta, 'wykonana')}
+                                      disabled={loading}
+                                      className="text-green-600 hover:text-green-700 p-1 h-7 w-7"
+                                      title="Oznacz jako wykonana"
+                                    >
+                                      <CheckCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUpdateVisitStatus(wizyta, 'zaplanowana')}
+                                      disabled={loading}
+                                      className="text-blue-600 hover:text-blue-700 p-1 h-7 w-7"
+                                      title="Cofnij do zaplanowana"
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditWizyta(wizyta)}
+                                  disabled={loading}
+                                  className="p-1 h-7 w-7"
+                                  title="Edytuj"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteWizyta(wizyta)}
+                                  disabled={loading}
+                                  className="text-red-500 p-1 h-7 w-7"
+                                  title="Usuń"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-sm text-muted-foreground">
+                          Brak wizyt na wybrany dzień
+                        </div>
+                      )}
+
                       <WizytyDodatkowePanel 
                         date={selectedDateStr}
                         variant="calendar"

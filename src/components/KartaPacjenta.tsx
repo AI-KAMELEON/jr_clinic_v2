@@ -41,13 +41,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CalendarIcon, PencilIcon, PlusIcon, TrashIcon, AlertTriangle, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -95,13 +88,6 @@ interface Pacjent {
   wizytyDodatkowe: WizytaDodatkowaRecord[];
   notatkiOgolne?: string;
 }
-
-const RODZAJE_DODATKOWE = [
-  "Zdjęcie gumek",
-  "Zdjęcie RTG",
-  "Kontrola aparatu",
-  "Inne",
-];
 
 const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [pacjent, setPacjent] = useState<Pacjent | null>(null);
@@ -204,7 +190,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [formCito, setFormCito] = useState({ powod: '', notatki: '' });
   const [formDodatkowa, setFormDodatkowa] = useState({
     data: format(new Date(), 'yyyy-MM-dd'),
-    rodzaj: RODZAJE_DODATKOWE[0],
+    rodzaj: '',
     notatki: '',
   });
 
@@ -567,7 +553,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const handleDodatkowaWizyta = () => {
     setFormDodatkowa({
       data: format(new Date(), 'yyyy-MM-dd'),
-      rodzaj: RODZAJE_DODATKOWE[0],
+      rodzaj: '',
       notatki: '',
     });
     setDodatkowaDialogOpen(true);
@@ -1166,20 +1152,13 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Rodzaj</Label>
-              <Select
+              <Label htmlFor="dod-rodzaj">Rodzaj</Label>
+              <Input
+                id="dod-rodzaj"
                 value={formDodatkowa.rodzaj}
-                onValueChange={(value) => setFormDodatkowa({ ...formDodatkowa, rodzaj: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RODZAJE_DODATKOWE.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => setFormDodatkowa({ ...formDodatkowa, rodzaj: e.target.value })}
+                placeholder="np. zdjęcie gumek"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="dod-notatki">Notatki</Label>
