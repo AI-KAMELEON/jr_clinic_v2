@@ -23,13 +23,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AlertCircle, CheckCircle2, Clock, Pencil, Trash2, XCircle } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Clock, Pencil, Trash2, XCircle } from "lucide-react";
 import { supabase, type DodatkowaStatus } from "@/lib/supabase";
 
 export type WizytaDodatkowaWithPacjent = {
   id: string;
   pacjent_id: string;
   data: string;
+  kolejnosc: number;
   rodzaj: string;
   notatki: string | null;
   status: string;
@@ -61,6 +62,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
   const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
   const [form, setForm] = useState({ data: "", rodzaj: "", notatki: "" });
   const [saving, setSaving] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const getTitle = () =>
     variant === "dashboard" ? "Wizyty dodatkowe na dziś" : "Wizyty dodatkowe";
@@ -75,7 +77,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
         .select("*")
         .eq("data", date)
         .neq("status", "anulowana")
-        .order("created_at", { ascending: true });
+        .order("kolejnosc", { ascending: true });
 
       if (fetchError) throw fetchError;
 
@@ -84,6 +86,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
           id: row.id!,
           pacjent_id: row.pacjent_id!,
           data: row.data!,
+          kolejnosc: row.kolejnosc ?? 0,
           rodzaj: row.rodzaj!,
           notatki: row.notatki,
           status: row.status!,
@@ -118,6 +121,40 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
     } catch (err) {
       console.error("Error updating additional visit status:", err);
       setError("Błąd podczas aktualizacji statusu");
+    }
+  };
+
+  const moveItem = async (index: number, direction: "up" | "down") => {
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= wizyty.length) return;
+
+    const current = wizyty[index];
+    const neighbor = wizyty[swapIndex];
+
+    try {
+      setReordering(true);
+      setError(null);
+
+      const { error: err1 } = await supabase
+        .from("wizyty_dodatkowe")
+        .update({ kolejnosc: neighbor.kolejnosc })
+        .eq("id", current.id);
+
+      if (err1) throw err1;
+
+      const { error: err2 } = await supabase
+        .from("wizyty_dodatkowe")
+        .update({ kolejnosc: current.kolejnosc })
+        .eq("id", neighbor.id);
+
+      if (err2) throw err2;
+
+      await fetchWizyty();
+    } catch (err) {
+      console.error("Error reordering additional visits:", err);
+      setError("Błąd podczas zmiany kolejności");
+    } finally {
+      setReordering(false);
     }
   };
 
@@ -186,8 +223,28 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
   const actionBtnClass = useSingleLine ? "h-7 w-7" : isCompact ? "h-6 w-6" : "h-8 w-8";
   const actionIconClass = useSingleLine ? "h-3.5 w-3.5" : isCompact ? "h-3 w-3" : "h-4 w-4";
 
-  const renderActions = (wizyta: WizytaDodatkowaWithPacjent) => (
+  const renderActions = (wizyta: WizytaDodatkowaWithPacjent, index: number) => (
     <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={actionBtnClass}
+        disabled={reordering || index === 0}
+        onClick={() => moveItem(index, "up")}
+        title="Przesuń w górę"
+      >
+        <ArrowUp className={actionIconClass} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={actionBtnClass}
+        disabled={reordering || index === wizyty.length - 1}
+        onClick={() => moveItem(index, "down")}
+        title="Przesuń w dół"
+      >
+        <ArrowDown className={actionIconClass} />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
@@ -266,7 +323,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
           </div>
         ) : (
           <div className={`space-y-2 ${isCompact ? "text-xs" : "text-sm"}`}>
-            {wizyty.map((wizyta) => (
+            {wizyty.map((wizyta, index) => (
               <div
                 key={wizyta.id}
                 className={`flex items-center justify-between gap-2 rounded-md border p-2 ${
@@ -284,17 +341,23 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
                 {useSingleLine ? (
                   <>
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="w-[9rem] shrink-0 truncate font-medium">
+                      <span className="w-[8rem] shrink-0 truncate font-medium">
                         {wizyta.imie} {wizyta.nazwisko}
                       </span>
-                      <span className="w-[6rem] shrink-0 truncate text-muted-foreground">
+                      <span
+                        className="w-[10rem] shrink-0 truncate text-muted-foreground"
+                        title={wizyta.rodzaj}
+                      >
                         {wizyta.rodzaj}
                       </span>
-                      <span className="min-w-0 flex-1 truncate italic text-muted-foreground">
+                      <span
+                        className="w-[14rem] shrink-0 truncate italic text-muted-foreground"
+                        title={wizyta.notatki || undefined}
+                      >
                         {wizyta.notatki || "—"}
                       </span>
                     </div>
-                    {renderActions(wizyta)}
+                    {renderActions(wizyta, index)}
                   </>
                 ) : (
                   <>
@@ -309,7 +372,7 @@ export const WizytyDodatkowePanel: React.FC<WizytyDodatkowePanelProps> = ({
                         </div>
                       )}
                     </div>
-                    {renderActions(wizyta)}
+                    {renderActions(wizyta, index)}
                   </>
                 )}
               </div>

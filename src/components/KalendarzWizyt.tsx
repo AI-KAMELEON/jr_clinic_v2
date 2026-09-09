@@ -35,7 +35,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import WizytyDodatkowePanel from "./WizytyDodatkowePanel";
-import DailyNoteEditor from "./DailyNoteEditor";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import {
@@ -206,40 +205,30 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
   const rodzajeWizyt = [
     "LECZENIE",
     "GUMKI",
+    "PLOMBA",
+    "WYRWANIE ZĘBA",
+    "KONSULTACJA",
+    "PRZEGLĄD",
+    "POPRAWA",
+    "WYBIELANIE",
+    "MEDYCYNA ESTETYCZNA",
     "ZAŁOŻENIE APARATU GÓRA",
     "ZAŁOŻENIE APARATU DÓŁ",
+    "ZAŁOŻENIE APARATU GÓRA/DÓŁ",
     "ZDJĘCIE APARATU GÓRA",
     "ZDJĘCIE APARATU DÓŁ",
-    "WYRWANIE ZĘBA",
+    "ZDJĘCIE APARATU GÓRA/DÓŁ",
     "PORCELANA GÓRA",
     "PORCELANA DÓŁ",
+    "CYRKON GÓRA",
+    "CYRKON DÓŁ",
+    "PROTEZA GÓRA",
+    "PROTEZA DÓŁ",
     "LICÓWKI GÓRA",
     "LICÓWKI DÓŁ",
     "BONDING GÓRA",
     "BONDING DÓŁ",
-    "KORONY GÓRA",
-    "KORONY DÓŁ",
-    "MOST GÓRA",
-    "MOST DÓŁ",
-    "PROTEZA GÓRA",
-    "PROTEZA DÓŁ",
-    "POPRAWA LICÓWKI",
-    "POPRAWA BONDING",
-    "POPRAWA KORON",
-    "POPRAWA PORCELANY",
-    "POPRAWA PROTEZY",
-    "PRZEGLĄD",
-    "LAKIEROWANIE",
-    "KAMIEŃ",
-    "WYBIELANIE",
-    "PLOMBA",
-    "SZLIFOWANIE",
-    "UKRUSZONY ZĄB",
-    "BOTOX",
-    "NICI",
-    "USTA",
-    "GAZ",
-    "KONSULTACJA",
+    "REKLAMACJA",
   ];
 
   const monthPreviewSlots = Array.from(
@@ -2410,10 +2399,6 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                         date={selectedDateStr}
                         variant="calendar"
                         onPatientSelect={onPatientSelect}
-                      />
-                      <DailyNoteEditor 
-                        date={selectedDateStr}
-                        variant="calendar"
                       />
                     </div>
                   </div>

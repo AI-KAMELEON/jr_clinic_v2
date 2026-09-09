@@ -395,6 +395,7 @@ export type Database = {
           created_at: string | null
           data: string
           id: string
+          kolejnosc: number
           notatki: string | null
           pacjent_id: string
           rodzaj: string
@@ -404,6 +405,7 @@ export type Database = {
           created_at?: string | null
           data: string
           id?: string
+          kolejnosc: number
           notatki?: string | null
           pacjent_id: string
           rodzaj: string
@@ -413,6 +415,7 @@ export type Database = {
           created_at?: string | null
           data?: string
           id?: string
+          kolejnosc?: number
           notatki?: string | null
           pacjent_id?: string
           rodzaj?: string
@@ -467,6 +470,7 @@ export type Database = {
           data: string | null
           id: string | null
           imie: string | null
+          kolejnosc: number | null
           nazwisko: string | null
           notatki: string | null
           pacjent_id: string | null

@@ -71,6 +71,7 @@ interface WizytaDodatkowaRecord {
   rodzaj: string;
   notatki: string;
   status: string;
+  kolejnosc: number;
   created_at: string | null;
 }
 
@@ -135,7 +136,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             .from('wizyty_dodatkowe')
             .select('*')
             .eq('pacjent_id', pacjentId)
-            .order('data', { ascending: false });
+            .order('data', { ascending: false })
+            .order('kolejnosc', { ascending: true });
 
           setPacjent({
             id: data.id,
@@ -162,6 +164,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
               rodzaj: d.rodzaj,
               notatki: d.notatki || '',
               status: d.status,
+              kolejnosc: d.kolejnosc,
               created_at: d.created_at,
             })),
           });
@@ -690,6 +693,15 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         return;
       }
 
+      const { data: maxOrderData } = await supabase
+        .from('wizyty_dodatkowe')
+        .select('kolejnosc')
+        .eq('data', formDodatkowa.data)
+        .order('kolejnosc', { ascending: false })
+        .limit(1);
+
+      const nextOrder = (maxOrderData?.[0]?.kolejnosc || 0) + 1;
+
       const { data: newDodatkowa, error } = await supabase
         .from('wizyty_dodatkowe')
         .insert({
@@ -698,6 +710,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
           rodzaj: formDodatkowa.rodzaj,
           notatki: formDodatkowa.notatki || null,
           status: 'zaplanowana',
+          kolejnosc: nextOrder,
         })
         .select()
         .single();
@@ -713,6 +726,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             rodzaj: formDodatkowa.rodzaj,
             notatki: formDodatkowa.notatki,
             status: 'zaplanowana',
+            kolejnosc: nextOrder,
             created_at: newDodatkowa.created_at,
           },
           ...pacjent.wizytyDodatkowe,
