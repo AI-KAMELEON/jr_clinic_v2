@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
@@ -11,11 +14,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
-  FileText,
+  Pencil,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -46,6 +68,12 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingWizyta, setEditingWizyta] = useState<WizytaCitoWithPacjent | null>(null);
+  const [form, setForm] = useState({ powod: "", notatki: "" });
+  const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [wizytaToDelete, setWizytaToDelete] = useState<string | null>(null);
 
   const fetchWizyty = useCallback(async () => {
     try {
@@ -99,6 +127,64 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
     } catch (err) {
       console.error("Error updating cito status:", err);
       setError("Błąd podczas aktualizacji statusu");
+    }
+  };
+
+  const openEdit = (wizyta: WizytaCitoWithPacjent) => {
+    setEditingWizyta(wizyta);
+    setForm({
+      powod: wizyta.powod || "",
+      notatki: wizyta.notatki || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWizyta) return;
+    try {
+      setSaving(true);
+      setError(null);
+      const { error: updateError } = await supabase
+        .from("wizyty_cito")
+        .update({
+          powod: form.powod || null,
+          notatki: form.notatki || null,
+        })
+        .eq("id", editingWizyta.id);
+
+      if (updateError) throw updateError;
+      setEditDialogOpen(false);
+      setEditingWizyta(null);
+      await fetchWizyty();
+    } catch (err) {
+      console.error("Error editing cito visit:", err);
+      setError("Błąd podczas edycji wizyty Cito");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openDelete = (id: string) => {
+    setWizytaToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!wizytaToDelete) return;
+    try {
+      setError(null);
+      const { error: deleteError } = await supabase
+        .from("wizyty_cito")
+        .delete()
+        .eq("id", wizytaToDelete);
+
+      if (deleteError) throw deleteError;
+      setDeleteDialogOpen(false);
+      setWizytaToDelete(null);
+      await fetchWizyty();
+    } catch (err) {
+      console.error("Error deleting cito visit:", err);
+      setError("Błąd podczas usuwania wizyty Cito");
     }
   };
 
@@ -179,16 +265,19 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
               </TableHeader>
               <TableBody>
                 {wizyty.map((wizyta, index) => (
-                  <TableRow key={wizyta.id}>
+                  <TableRow
+                    key={wizyta.id}
+                    className={onPatientSelect ? "cursor-pointer hover:bg-muted/50" : undefined}
+                    onClick={() => onPatientSelect?.(wizyta.pacjent_id)}
+                    title={
+                      onPatientSelect
+                        ? `Kliknij aby przejść do karty pacjenta: ${wizyta.imie} ${wizyta.nazwisko}`
+                        : undefined
+                    }
+                  >
                     <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell>
-                      <button
-                        type="button"
-                        className="font-medium text-left hover:text-blue-600 hover:underline"
-                        onClick={() => onPatientSelect?.(wizyta.pacjent_id)}
-                      >
-                        {wizyta.imie} {wizyta.nazwisko}
-                      </button>
+                    <TableCell className="font-medium">
+                      {wizyta.imie} {wizyta.nazwisko}
                     </TableCell>
                     <TableCell>{wizyta.telefon}</TableCell>
                     <TableCell>{wizyta.powod || "—"}</TableCell>
@@ -199,7 +288,7 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
                           })
                         : "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end items-center gap-1">
                         <Button
                           variant="ghost"
@@ -224,6 +313,24 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEdit(wizyta)}
+                          title="Edytuj"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => openDelete(wizyta.id)}
+                          title="Usuń"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8 text-green-600"
                           onClick={() => updateStatus(wizyta.id, "zrealizowana")}
                           title="Oznacz jako zrealizowana"
@@ -239,17 +346,6 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
-                        {onPatientSelect && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onPatientSelect(wizyta.pacjent_id)}
-                            title="Karta pacjenta"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </Button>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -259,6 +355,77 @@ export const WizytyCitoPanel: React.FC<WizytyCitoPanelProps> = ({
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setEditingWizyta(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edytuj wizytę Cito</DialogTitle>
+            <DialogDescription>
+              {editingWizyta
+                ? `${editingWizyta.imie} ${editingWizyta.nazwisko}`
+                : "Zaktualizuj powód lub notatki"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-cito-powod">Powód</Label>
+              <Input
+                id="edit-cito-powod"
+                value={form.powod}
+                onChange={(e) => setForm({ ...form, powod: e.target.value })}
+                placeholder="np. ból zęba"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-cito-notatki">Notatki</Label>
+              <Textarea
+                id="edit-cito-notatki"
+                value={form.notatki}
+                onChange={(e) => setForm({ ...form, notatki: e.target.value })}
+                placeholder="Dodatkowe uwagi..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setEditingWizyta(null);
+              }}
+            >
+              Anuluj
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving ? "Zapisywanie..." : "Zapisz"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć wizytę Cito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta akcja nie może zostać cofnięta. Wpis Cito zostanie trwale usunięty.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

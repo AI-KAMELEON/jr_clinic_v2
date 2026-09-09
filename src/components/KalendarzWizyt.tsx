@@ -2409,6 +2409,7 @@ const KalendarzWizyt = ({ onNavigateToPatients, onPatientSelect }: KalendarzWizy
                       <WizytyDodatkowePanel 
                         date={selectedDateStr}
                         variant="calendar"
+                        onPatientSelect={onPatientSelect}
                       />
                       <DailyNoteEditor 
                         date={selectedDateStr}

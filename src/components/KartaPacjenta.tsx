@@ -187,6 +187,12 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
   const [citoDialogOpen, setCitoDialogOpen] = useState(false);
   const [dodatkowaDialogOpen, setDodatkowaDialogOpen] = useState(false);
   const [citoDuplicateDialog, setCitoDuplicateDialog] = useState(false);
+  const [edytowaneCito, setEdytowaneCito] = useState<WizytaCitoRecord | null>(null);
+  const [edytowanaDodatkowa, setEdytowanaDodatkowa] = useState<WizytaDodatkowaRecord | null>(null);
+  const [deleteCitoDialogOpen, setDeleteCitoDialogOpen] = useState(false);
+  const [citoToDelete, setCitoToDelete] = useState<string | null>(null);
+  const [deleteDodatkowaDialogOpen, setDeleteDodatkowaDialogOpen] = useState(false);
+  const [dodatkowaToDelete, setDodatkowaToDelete] = useState<string | null>(null);
   const [formCito, setFormCito] = useState({ powod: '', notatki: '' });
   const [formDodatkowa, setFormDodatkowa] = useState({
     data: format(new Date(), 'yyyy-MM-dd'),
@@ -486,12 +492,69 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       setCitoDuplicateDialog(true);
       return;
     }
+    setEdytowaneCito(null);
     setFormCito({ powod: '', notatki: '' });
     setCitoDialogOpen(true);
   };
 
+  const handleEdytujCito = (cito: WizytaCitoRecord) => {
+    setEdytowaneCito(cito);
+    setFormCito({ powod: cito.powod || '', notatki: cito.notatki || '' });
+    setCitoDialogOpen(true);
+  };
+
+  const handleUsunCito = (id: string) => {
+    setCitoToDelete(id);
+    setDeleteCitoDialogOpen(true);
+  };
+
+  const confirmDeleteCito = async () => {
+    if (!citoToDelete) return;
+    try {
+      const { error } = await supabase
+        .from('wizyty_cito')
+        .delete()
+        .eq('id', citoToDelete);
+      if (error) throw error;
+      setPacjent({
+        ...pacjent,
+        wizytyCito: pacjent.wizytyCito.filter((w) => w.id !== citoToDelete),
+      });
+      setDeleteCitoDialogOpen(false);
+      setCitoToDelete(null);
+    } catch (error) {
+      console.error('Error deleting cito visit:', error);
+      alert('Błąd podczas usuwania wizyty Cito');
+    }
+  };
+
   const handleCitoSubmit = async () => {
     try {
+      if (edytowaneCito) {
+        const { error } = await supabase
+          .from('wizyty_cito')
+          .update({
+            powod: formCito.powod || null,
+            notatki: formCito.notatki || null,
+          })
+          .eq('id', edytowaneCito.id);
+
+        if (error) throw error;
+
+        setPacjent({
+          ...pacjent,
+          wizytyCito: pacjent.wizytyCito.map((w) =>
+            w.id === edytowaneCito.id
+              ? { ...w, powod: formCito.powod, notatki: formCito.notatki }
+              : w,
+          ),
+        });
+        setCitoDialogOpen(false);
+        setEdytowaneCito(null);
+        setFormCito({ powod: '', notatki: '' });
+        return;
+      }
+
       const { data: existing } = await supabase
         .from('wizyty_cito')
         .select('id')
@@ -545,12 +608,13 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       setCitoDialogOpen(false);
       setFormCito({ powod: '', notatki: '' });
     } catch (error) {
-      console.error('Error adding cito visit:', error);
-      alert('Błąd podczas dodawania do listy Cito');
+      console.error('Error saving cito visit:', error);
+      alert(edytowaneCito ? 'Błąd podczas edycji wizyty Cito' : 'Błąd podczas dodawania do listy Cito');
     }
   };
 
   const handleDodatkowaWizyta = () => {
+    setEdytowanaDodatkowa(null);
     setFormDodatkowa({
       data: format(new Date(), 'yyyy-MM-dd'),
       rodzaj: '',
@@ -559,8 +623,73 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
     setDodatkowaDialogOpen(true);
   };
 
+  const handleEdytujDodatkowa = (wizyta: WizytaDodatkowaRecord) => {
+    setEdytowanaDodatkowa(wizyta);
+    setFormDodatkowa({
+      data: wizyta.data,
+      rodzaj: wizyta.rodzaj,
+      notatki: wizyta.notatki || '',
+    });
+    setDodatkowaDialogOpen(true);
+  };
+
+  const handleUsunDodatkowa = (id: string) => {
+    setDodatkowaToDelete(id);
+    setDeleteDodatkowaDialogOpen(true);
+  };
+
+  const confirmDeleteDodatkowa = async () => {
+    if (!dodatkowaToDelete) return;
+    try {
+      const { error } = await supabase
+        .from('wizyty_dodatkowe')
+        .delete()
+        .eq('id', dodatkowaToDelete);
+      if (error) throw error;
+      setPacjent({
+        ...pacjent,
+        wizytyDodatkowe: pacjent.wizytyDodatkowe.filter((w) => w.id !== dodatkowaToDelete),
+      });
+      setDeleteDodatkowaDialogOpen(false);
+      setDodatkowaToDelete(null);
+    } catch (error) {
+      console.error('Error deleting additional visit:', error);
+      alert('Błąd podczas usuwania wizyty dodatkowej');
+    }
+  };
+
   const handleDodatkowaSubmit = async () => {
     try {
+      if (edytowanaDodatkowa) {
+        const { error } = await supabase
+          .from('wizyty_dodatkowe')
+          .update({
+            data: formDodatkowa.data,
+            rodzaj: formDodatkowa.rodzaj,
+            notatki: formDodatkowa.notatki || null,
+          })
+          .eq('id', edytowanaDodatkowa.id);
+
+        if (error) throw error;
+
+        setPacjent({
+          ...pacjent,
+          wizytyDodatkowe: pacjent.wizytyDodatkowe.map((w) =>
+            w.id === edytowanaDodatkowa.id
+              ? {
+                  ...w,
+                  data: formDodatkowa.data,
+                  rodzaj: formDodatkowa.rodzaj,
+                  notatki: formDodatkowa.notatki,
+                }
+              : w,
+          ),
+        });
+        setDodatkowaDialogOpen(false);
+        setEdytowanaDodatkowa(null);
+        return;
+      }
+
       const { data: newDodatkowa, error } = await supabase
         .from('wizyty_dodatkowe')
         .insert({
@@ -591,8 +720,8 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
       });
       setDodatkowaDialogOpen(false);
     } catch (error) {
-      console.error('Error adding additional visit:', error);
-      alert('Błąd podczas dodawania wizyty dodatkowej');
+      console.error('Error saving additional visit:', error);
+      alert(edytowanaDodatkowa ? 'Błąd podczas edycji wizyty dodatkowej' : 'Błąd podczas dodawania wizyty dodatkowej');
     }
   };
 
@@ -784,6 +913,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                       <TableHead>Powód</TableHead>
                       <TableHead>Notatki</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Akcje</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -799,11 +929,29 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                           <TableCell>{w.powod || "-"}</TableCell>
                           <TableCell>{w.notatki || "-"}</TableCell>
                           <TableCell>{w.status}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdytujCito(w)}
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUsunCito(w.id)}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-4 text-muted-foreground">
                           Brak wpisów Cito
                         </TableCell>
                       </TableRow>
@@ -835,6 +983,7 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                       <TableHead>Rodzaj</TableHead>
                       <TableHead>Notatki</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Akcje</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -847,11 +996,29 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
                           <TableCell>{w.rodzaj}</TableCell>
                           <TableCell>{w.notatki || "-"}</TableCell>
                           <TableCell>{w.status}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdytujDodatkowa(w)}
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUsunDodatkowa(w.id)}
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
+                        <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
                           Brak wizyt dodatkowych
                         </TableCell>
                       </TableRow>
@@ -1097,12 +1264,23 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={citoDialogOpen} onOpenChange={setCitoDialogOpen}>
+      <Dialog
+        open={citoDialogOpen}
+        onOpenChange={(open) => {
+          setCitoDialogOpen(open);
+          if (!open) {
+            setEdytowaneCito(null);
+            setFormCito({ powod: '', notatki: '' });
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Oznacz jako Cito</DialogTitle>
+            <DialogTitle>{edytowaneCito ? "Edytuj wizytę Cito" : "Oznacz jako Cito"}</DialogTitle>
             <DialogDescription>
-              Pacjent trafi na listę pilnych wizyt (nie blokuje kalendarza)
+              {edytowaneCito
+                ? "Zaktualizuj powód lub notatki wizyty Cito"
+                : "Pacjent trafi na listę pilnych wizyt (nie blokuje kalendarza)"}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -1127,16 +1305,34 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCitoDialogOpen(false)}>Anuluj</Button>
-            <Button onClick={handleCitoSubmit}>Dodaj do Cito</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCitoDialogOpen(false);
+                setEdytowaneCito(null);
+              }}
+            >
+              Anuluj
+            </Button>
+            <Button onClick={handleCitoSubmit}>
+              {edytowaneCito ? "Zapisz" : "Dodaj do Cito"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={dodatkowaDialogOpen} onOpenChange={setDodatkowaDialogOpen}>
+      <Dialog
+        open={dodatkowaDialogOpen}
+        onOpenChange={(open) => {
+          setDodatkowaDialogOpen(open);
+          if (!open) setEdytowanaDodatkowa(null);
+        }}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Wizyta dodatkowa</DialogTitle>
+            <DialogTitle>
+              {edytowanaDodatkowa ? "Edytuj wizytę dodatkową" : "Wizyta dodatkowa"}
+            </DialogTitle>
             <DialogDescription>
               Krótka wizyta widoczna w panelu wizyt dodatkowych (nie blokuje kalendarza)
             </DialogDescription>
@@ -1172,11 +1368,55 @@ const KartaPacjenta = ({ pacjentId }: { pacjentId: string }) => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDodatkowaDialogOpen(false)}>Anuluj</Button>
-            <Button onClick={handleDodatkowaSubmit}>Dodaj</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDodatkowaDialogOpen(false);
+                setEdytowanaDodatkowa(null);
+              }}
+            >
+              Anuluj
+            </Button>
+            <Button onClick={handleDodatkowaSubmit}>
+              {edytowanaDodatkowa ? "Zapisz" : "Dodaj"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteCitoDialogOpen} onOpenChange={setDeleteCitoDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć wizytę Cito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta akcja nie może zostać cofnięta. Wpis Cito zostanie trwale usunięty.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteCito} className="bg-red-600 hover:bg-red-700">
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteDodatkowaDialogOpen} onOpenChange={setDeleteDodatkowaDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć wizytę dodatkową?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta akcja nie może zostać cofnięta. Wizyta dodatkowa zostanie trwale usunięta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteDodatkowa} className="bg-red-600 hover:bg-red-700">
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={citoDuplicateDialog} onOpenChange={setCitoDuplicateDialog}>
         <AlertDialogContent>

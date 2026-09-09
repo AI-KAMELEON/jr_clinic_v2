@@ -684,6 +684,7 @@ const Home = () => {
               <WizytyDodatkowePanel 
                 date={new Date().toISOString().split('T')[0]} 
                 variant="dashboard"
+                onPatientSelect={handlePatientSelect}
               />
 
               <DailyNoteEditor 
